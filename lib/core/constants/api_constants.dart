@@ -41,6 +41,17 @@ class ApiConstants {
   /// Get list of available editions
   static const String getEditionsEndpoint = '/edition';
 
+  // ── Dua ───────────────────────────────────────────────────────────────────
+
+  /// Dua data is bundled locally in assets/data/duas.json (offline-first).
+  /// Source: Hisnul Muslim (Fortress of the Muslim) by Sa'id bin Wahf Al-Qahtani.
+  ///
+  /// Future remote API candidate: https://api.hisnmuslim.com
+  /// (no authentication required, community-maintained)
+  static const String duaAssetPath = 'assets/data/duas.json';
+
+  // ── Timeouts ──────────────────────────────────────────────────────────────
+
   /// Connection timeout in milliseconds
   static const int connectionTimeout = 30000;
 
