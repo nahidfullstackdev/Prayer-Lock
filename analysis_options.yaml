@@ -1,0 +1,49 @@
+# This file configures the analyzer, which statically analyzes Dart code to
+# check for errors, warnings, and lints.
+#
+# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
+# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
+# invoked from the command line by running `flutter analyze`.
+
+# The following line activates a set of recommended lints for Flutter apps,
+# packages, and plugins designed to encourage good coding practices.
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  # Enhanced lint rules for Muslim Companion App
+  # Enforces clean code, SOLID principles, and best practices
+  rules:
+    # Style rules
+    - always_declare_return_types
+    - prefer_const_constructors
+    - prefer_const_literals_to_create_immutables
+    - prefer_final_fields
+    - prefer_final_locals
+    - use_key_in_widget_constructors
+    - require_trailing_commas
+    - sort_child_properties_last
+    - use_full_hex_values_for_flutter_colors
+
+    # Code quality
+    - avoid_print
+    - avoid_unnecessary_containers
+    - sized_box_for_whitespace
+    - avoid_empty_else
+    - avoid_returning_null_for_void
+    - cancel_subscriptions
+    - close_sinks
+    - prefer_single_quotes
+
+    # Error prevention
+    - always_use_package_imports
+    - avoid_slow_async_io
+    - avoid_type_to_string
+    - literal_only_boolean_expressions
+    - no_adjacent_strings_in_list
+    - prefer_void_to_null
+    - test_types_in_equals
+    - throw_in_finally
+    - unnecessary_statements
+
+# Additional information about this file can be found at
+# https://dart.dev/guides/language/analysis-options
