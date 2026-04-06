@@ -1,4 +1,4 @@
-# flutter_muslim
+# prayer_lock
 
 A new Flutter project.
 
