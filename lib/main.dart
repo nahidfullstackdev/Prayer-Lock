@@ -1,6 +1,8 @@
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:prayer_lock/features/onboarding/presentation/providers/onboarding_provider.dart';
+import 'package:prayer_lock/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/notification_service.dart';
 import 'package:prayer_lock/features/subscription/data/services/revenuecat_service.dart';
 import 'package:prayer_lock/main_screen.dart';
@@ -71,7 +73,42 @@ class MuslimCompanionApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
-      home: const MainScreen(),
+      home: const _AppHome(),
+    );
+  }
+}
+
+// ─── App Router ──────────────────────────────────────────────────────────────
+
+/// Checks onboarding completion on first launch and routes accordingly.
+class _AppHome extends ConsumerWidget {
+  const _AppHome();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final onboardingAsync = ref.watch(onboardingCompletedProvider);
+    return onboardingAsync.when(
+      data: (completed) =>
+          completed ? const MainScreen() : const OnboardingScreen(),
+      loading: () => const _SplashScreen(),
+      error: (_, __) => const MainScreen(),
+    );
+  }
+}
+
+class _SplashScreen extends StatelessWidget {
+  const _SplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF0D1520),
+      body: Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.emerald),
+          strokeWidth: 2,
+        ),
+      ),
     );
   }
 }

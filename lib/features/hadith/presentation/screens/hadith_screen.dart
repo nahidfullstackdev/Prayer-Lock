@@ -5,7 +5,7 @@ import 'package:prayer_lock/features/hadith/presentation/providers/hadith_provid
 import 'package:prayer_lock/features/hadith/presentation/screens/hadith_list_screen.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 
-/// Hadith home screen: shows the 6 major collections and navigates into each.
+/// Hadith home screen: shows all supported collections and navigates into each.
 class HadithScreen extends ConsumerStatefulWidget {
   const HadithScreen({super.key});
 
@@ -29,11 +29,9 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
     final state = ref.watch(hadithCollectionsProvider);
 
     // Fallback static collections used while loading / on error
-    final staticCollections = _staticCollections();
-
     final collections = state.collections.isNotEmpty
         ? state.collections
-        : staticCollections;
+        : _staticCollections();
 
     return Scaffold(
       body: CustomScrollView(
@@ -138,6 +136,7 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
               itemCount: collections.length,
               itemBuilder: (context, index) {
                 final c = collections[index];
+                // Free: first 2 collections unlocked; rest require Pro
                 final bool locked = !isPro && index >= 2;
                 return _CollectionCard(
                   collection: c,
@@ -196,9 +195,9 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Unlock all 6 hadith collections with Prayer Lock Pro. '
+              'Unlock all 10 hadith collections with Prayer Lock Pro. '
               'Browse thousands of authenticated hadiths from the major '
-              'books of Sunnah.',
+              'books of Sunnah in multiple languages.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -231,43 +230,78 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
     );
   }
 
-  /// Static fallback while API loads (matches the 6 planned collections).
+  /// Static fallback collections shown while the API loads or on error.
+  /// Book keys match the fawazahmed0/hadith-api edition naming.
   List<HadithCollection> _staticCollections() => const [
         HadithCollection(
           name: 'bukhari',
           title: 'Sahih al-Bukhari',
           titleArabic: 'صحيح البخاري',
           totalHadith: 7563,
+          availableLanguages: ['ara', 'ben', 'eng', 'fra', 'ind', 'rus', 'tam', 'tur', 'urd'],
         ),
         HadithCollection(
           name: 'muslim',
           title: 'Sahih Muslim',
           titleArabic: 'صحيح مسلم',
-          totalHadith: 5362,
-        ),
-        HadithCollection(
-          name: 'abudawud',
-          title: 'Sunan Abu Dawud',
-          titleArabic: 'سنن أبي داود',
-          totalHadith: 5274,
+          totalHadith: 3033,
+          availableLanguages: ['ara', 'ben', 'eng', 'fra', 'ind', 'rus', 'tam', 'tur', 'urd'],
         ),
         HadithCollection(
           name: 'tirmidhi',
           title: "Jami' at-Tirmidhi",
           titleArabic: 'جامع الترمذي',
           totalHadith: 3956,
+          availableLanguages: ['ara', 'ben', 'eng', 'ind', 'tur', 'urd'],
+        ),
+        HadithCollection(
+          name: 'abudawud',
+          title: 'Sunan Abu Dawud',
+          titleArabic: 'سنن أبي داود',
+          totalHadith: 5274,
+          availableLanguages: ['ara', 'ben', 'eng', 'fra', 'ind', 'rus', 'tur', 'urd'],
         ),
         HadithCollection(
           name: 'nasai',
           title: "Sunan an-Nasa'i",
           titleArabic: 'سنن النسائي',
           totalHadith: 5758,
+          availableLanguages: ['ara', 'ben', 'eng', 'fra', 'ind', 'tur', 'urd'],
         ),
         HadithCollection(
           name: 'ibnmajah',
           title: 'Sunan Ibn Majah',
           titleArabic: 'سنن ابن ماجه',
           totalHadith: 4341,
+          availableLanguages: ['ara', 'ben', 'eng', 'fra', 'ind', 'tur', 'urd'],
+        ),
+        HadithCollection(
+          name: 'malik',
+          title: 'Muwatta Malik',
+          titleArabic: 'موطأ مالك',
+          totalHadith: 1594,
+          availableLanguages: ['ara', 'ben', 'eng', 'fra', 'ind', 'tur', 'urd'],
+        ),
+        HadithCollection(
+          name: 'nawawi',
+          title: 'Forty Hadith of Nawawi',
+          titleArabic: 'الأربعون النووية',
+          totalHadith: 42,
+          availableLanguages: ['ara', 'ben', 'eng', 'fra', 'tur'],
+        ),
+        HadithCollection(
+          name: 'qudsi',
+          title: 'Forty Hadith Qudsi',
+          titleArabic: 'الأحاديث القدسية',
+          totalHadith: 40,
+          availableLanguages: ['ara', 'eng', 'fra'],
+        ),
+        HadithCollection(
+          name: 'dehlawi',
+          title: 'Forty Hadith of Dehlawi',
+          titleArabic: 'أربعون حديثاً للدهلوي',
+          totalHadith: 40,
+          availableLanguages: ['ara', 'eng', 'fra'],
         ),
       ];
 }
@@ -366,7 +400,7 @@ class _CollectionCard extends StatelessWidget {
               Icon(
                 Icons.arrow_forward_ios_rounded,
                 size: 14,
-                color: locked ? cs.outlineVariant : cs.outlineVariant,
+                color: cs.outlineVariant,
               ),
             ],
           ),

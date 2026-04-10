@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/features/hadith/domain/entities/hadith_collection.dart';
+import 'package:prayer_lock/features/hadith/domain/entities/hadith_language.dart';
 import 'package:prayer_lock/features/hadith/presentation/providers/hadith_providers.dart';
 import 'package:prayer_lock/features/hadith/presentation/widgets/hadith_card.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 
-/// Displays hadiths for a single collection with search and infinite scroll.
+/// Displays hadiths for a single collection with search, language filter,
+/// and infinite scroll (Pro).
 class HadithListScreen extends ConsumerStatefulWidget {
   const HadithListScreen({required this.collection, super.key});
 
@@ -54,9 +56,18 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
     final cs = Theme.of(context).colorScheme;
     final isPro = ref.watch(isProProvider);
     final state = ref.watch(hadithListProvider(widget.collection.name));
+    final selectedLanguages = ref.watch(hadithSelectedLanguagesProvider);
 
     final displayList =
         state.isInSearchMode ? state.searchResults : state.hadiths;
+
+    // Available languages for this collection (filter to known ones)
+    final availableLangs = widget.collection.availableLanguages.isNotEmpty
+        ? widget.collection.availableLanguages
+            .map(HadithLanguage.fromCode)
+            .whereType<HadithLanguage>()
+            .toList()
+        : HadithLanguage.allLanguages;
 
     return Scaffold(
       body: CustomScrollView(
@@ -164,11 +175,22 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
               ),
             ),
 
+          // ── Language filter chips ─────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: _LanguageFilterRow(
+              availableLanguages: availableLangs,
+              selectedLanguages: selectedLanguages,
+              onToggle: (code) => ref
+                  .read(hadithSelectedLanguagesProvider.notifier)
+                  .toggle(code),
+            ),
+          ),
+
           // ── Free tier notice ─────────────────────────────────────────────
-          if (!isPro && !state.isInSearchMode)
+          if (!isPro && !state.isInSearchMode && state.hadiths.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                 child: Row(
                   children: [
                     Icon(
@@ -208,11 +230,13 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
               ),
             )
 
-          // ── Search results (in search mode) ──────────────────────────────
+          // ── Searching spinner ────────────────────────────────────────────
           else if (state.isInSearchMode && state.isSearching)
             const SliverFillRemaining(
               child: Center(child: CircularProgressIndicator()),
             )
+
+          // ── Empty search results ─────────────────────────────────────────
           else if (state.isInSearchMode && state.searchResults.isEmpty)
             SliverFillRemaining(
               child: Center(
@@ -276,6 +300,86 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
     );
   }
 }
+
+// ─── Language filter row ──────────────────────────────────────────────────────
+
+class _LanguageFilterRow extends StatelessWidget {
+  const _LanguageFilterRow({
+    required this.availableLanguages,
+    required this.selectedLanguages,
+    required this.onToggle,
+  });
+
+  final List<HadithLanguage> availableLanguages;
+  final List<String> selectedLanguages;
+  final void Function(String code) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                'Languages:',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+            ...availableLanguages.map((lang) {
+              final selected = selectedLanguages.contains(lang.code);
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: GestureDetector(
+                  onTap: () => onToggle(lang.code),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? cs.secondary
+                          : cs.surfaceContainer,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: selected
+                            ? cs.secondary
+                            : cs.outlineVariant,
+                      ),
+                    ),
+                    child: Text(
+                      lang.name,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: selected
+                            ? cs.onSecondary
+                            : cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Error view ───────────────────────────────────────────────────────────────
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});

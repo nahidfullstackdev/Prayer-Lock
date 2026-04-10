@@ -4,6 +4,7 @@ import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/hadith/domain/entities/hadith.dart';
 import 'package:prayer_lock/features/hadith/domain/usecases/get_hadiths.dart';
 import 'package:prayer_lock/features/hadith/domain/usecases/search_hadiths.dart';
+import 'package:prayer_lock/features/hadith/presentation/providers/hadith_language_preferences_provider.dart';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -58,22 +59,48 @@ class HadithListState {
 
 // ─── Notifier ─────────────────────────────────────────────────────────────────
 
-/// [isPro] controls whether all pages are accessible or just the first.
+/// Manages paginated hadith list for one collection.
+///
+/// [isPro] controls whether infinite scroll is enabled.
+/// Automatically reloads when the user's selected languages change.
 class HadithListNotifier extends StateNotifier<HadithListState> {
   HadithListNotifier({
     required this.collection,
     required this.isPro,
+    required this.ref,
     required this.getHadithsUseCase,
     required this.searchHadithsUseCase,
-  }) : super(const HadithListState());
+  }) : super(const HadithListState()) {
+    // Reload when the user changes their selected display languages
+    ref.listen<List<String>>(
+      hadithSelectedLanguagesProvider,
+      (prev, next) {
+        if (prev != null && !_listEquals(prev, next)) {
+          loadFirstPage();
+        }
+      },
+    );
+  }
 
   final String collection;
   final bool isPro;
+  final Ref ref;
   final GetHadithsUseCase getHadithsUseCase;
   final SearchHadithsUseCase searchHadithsUseCase;
 
   int get _pageSize =>
       isPro ? ApiConstants.hadithProPageSize : ApiConstants.hadithFreePageSize;
+
+  List<String> get _selectedLanguages =>
+      ref.read(hadithSelectedLanguagesProvider);
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 
   /// Load the first page. Call on screen init.
   Future<void> loadFirstPage() async {
@@ -90,6 +117,7 @@ class HadithListNotifier extends StateNotifier<HadithListState> {
       collection: collection,
       page: 1,
       limit: _pageSize,
+      languages: _selectedLanguages,
     );
 
     result.fold(
@@ -97,14 +125,17 @@ class HadithListNotifier extends StateNotifier<HadithListState> {
         AppLogger.error(
           'Failed to load hadiths ($collection): ${failure.message}',
         );
-        state = state.copyWith(isLoading: false, errorMessage: failure.message);
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: failure.message,
+        );
       },
       (hadiths) {
         state = state.copyWith(
           hadiths: hadiths,
           isLoading: false,
           currentPage: 1,
-          // Free users can only see the first page.
+          // Free users only get the first page
           hasMore: isPro && hadiths.length >= _pageSize,
         );
       },
@@ -124,6 +155,7 @@ class HadithListNotifier extends StateNotifier<HadithListState> {
       collection: collection,
       page: nextPage,
       limit: _pageSize,
+      languages: _selectedLanguages,
     );
 
     result.fold(

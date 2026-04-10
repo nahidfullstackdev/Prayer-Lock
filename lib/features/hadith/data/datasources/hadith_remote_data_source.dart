@@ -4,108 +4,153 @@ import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/hadith/data/models/hadith_collection_model.dart';
 import 'package:prayer_lock/features/hadith/data/models/hadith_model.dart';
 
-/// Fetches Hadith data from the sunnah.com API (v1).
+/// Fetches Hadith data from the fawazahmed0/hadith-api CDN.
 ///
-/// All endpoints require the X-API-Key header configured in [Dio].
+/// Free, open, no authentication required.
+/// Source: https://github.com/fawazahmed0/hadith-api
 class HadithRemoteDataSource {
   final Dio dio;
 
   const HadithRemoteDataSource({required this.dio});
 
-  /// GET /collections — returns the 6 major collections.
-  ///
-  /// Filters to only the collections used by this app.
-  Future<List<HadithCollectionModel>> fetchCollections() async {
-    const allowedCollections = {
-      'bukhari',
-      'muslim',
-      'tirmidhi',
-      'abudawud',
-      'nasai',
-      'ibnmajah',
-    };
+  // Supported book keys — order controls display on collections screen
+  static const List<String> _supportedBooks = [
+    'bukhari',
+    'muslim',
+    'tirmidhi',
+    'abudawud',
+    'nasai',
+    'ibnmajah',
+    'malik',
+    'nawawi',
+    'qudsi',
+    'dehlawi',
+  ];
 
+  /// GET /editions.min.json
+  ///
+  /// Returns all 10 supported collections with their available languages parsed
+  /// from the CDN metadata.
+  Future<List<HadithCollectionModel>> fetchEditions() async {
     try {
-      AppLogger.info('Fetching Hadith collections from API');
-      final response = await dio.get(ApiConstants.hadithCollectionsEndpoint);
+      AppLogger.info('Fetching hadith editions metadata from CDN');
+      final response = await dio.get(ApiConstants.hadithEditionsEndpoint);
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        final list = (data['data'] as List<dynamic>?) ?? [];
+        final models = <HadithCollectionModel>[];
 
-        final models = list
-            .map(
-              (e) => HadithCollectionModel.fromJson(e as Map<String, dynamic>),
-            )
-            .where((c) => allowedCollections.contains(c.name))
-            .toList();
+        for (final bookKey in _supportedBooks) {
+          if (data.containsKey(bookKey)) {
+            models.add(
+              HadithCollectionModel.fromEditionsJson(
+                bookKey,
+                data[bookKey] as Map<String, dynamic>,
+              ),
+            );
+          }
+        }
 
-        // Preserve insertion order matching allowedCollections ordering.
-        final ordered = allowedCollections.toList();
-        models.sort(
-          (a, b) => ordered.indexOf(a.name) - ordered.indexOf(b.name),
-        );
-
-        AppLogger.info('Fetched ${models.length} Hadith collections');
+        AppLogger.info('Fetched metadata for ${models.length} collections');
         return models;
       } else {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
-          message: 'Failed to fetch collections: ${response.statusCode}',
+          message: 'Failed to fetch editions: ${response.statusCode}',
         );
       }
     } on DioException {
       rethrow;
     } catch (e, st) {
-      AppLogger.error('Unexpected error fetching Hadith collections', e, st);
+      AppLogger.error('Unexpected error fetching hadith editions', e, st);
       throw DioException(
         requestOptions:
-            RequestOptions(path: ApiConstants.hadithCollectionsEndpoint),
+            RequestOptions(path: ApiConstants.hadithEditionsEndpoint),
         message: 'Unexpected error: $e',
       );
     }
   }
 
-  /// GET /collections/{collection}/hadiths?limit=N&page=N
-  Future<List<HadithModel>> fetchHadiths({
-    required String collection,
-    required int page,
-    required int limit,
+  /// GET /editions/{langCode}-{bookKey}.min.json
+  ///
+  /// Fetches ALL hadiths for one language edition of a book.
+  /// Each returned [HadithModel] has a single-key [translations] map:
+  /// `{ langCode: text }`. The repository merges multiple editions.
+  Future<List<HadithModel>> fetchHadithsForEdition({
+    required String bookKey,   // e.g. 'bukhari'
+    required String langCode,  // e.g. 'eng', 'ara'
   }) async {
-    final path = ApiConstants.hadithListEndpoint(collection);
+    final editionName = '$langCode-$bookKey';
+    final endpoint = ApiConstants.hadithEditionEndpoint(editionName);
+
     try {
-      AppLogger.info(
-        'Fetching Hadiths for $collection page=$page limit=$limit',
-      );
-      final response = await dio.get(
-        path,
-        queryParameters: {'limit': limit, 'page': page},
-      );
+      AppLogger.info('Fetching edition $editionName from CDN');
+      final response = await dio.get(endpoint);
 
       if (response.statusCode == 200) {
         final data = response.data as Map<String, dynamic>;
-        final list = (data['data'] as List<dynamic>?) ?? [];
-        final models = list
-            .map((e) => HadithModel.fromJson(e as Map<String, dynamic>))
+        final metadata = (data['metadata'] as Map<String, dynamic>?) ?? {};
+        final hadithsList = (data['hadiths'] as List<dynamic>?) ?? [];
+
+        final sectionLookup = _buildSectionLookup(metadata);
+
+        final models = hadithsList
+            .map(
+              (e) => HadithModel.fromApiJson(
+                e as Map<String, dynamic>,
+                bookKey,
+                langCode,
+                sectionLookup,
+              ),
+            )
             .toList();
-        AppLogger.info('Fetched ${models.length} hadiths from $collection');
+
+        AppLogger.info('Fetched ${models.length} hadiths for $editionName');
         return models;
       } else {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
-          message: 'Failed to fetch hadiths: ${response.statusCode}',
+          message: 'Failed to fetch $editionName: ${response.statusCode}',
         );
       }
     } on DioException {
       rethrow;
     } catch (e, st) {
-      AppLogger.error('Unexpected error fetching hadiths', e, st);
+      AppLogger.error(
+        'Unexpected error fetching edition $editionName',
+        e,
+        st,
+      );
       throw DioException(
-        requestOptions: RequestOptions(path: path),
+        requestOptions: RequestOptions(path: endpoint),
         message: 'Unexpected error: $e',
       );
     }
+  }
+
+  /// Builds a [hadithNumber] → [sectionName] lookup from edition metadata.
+  ///
+  /// The metadata contains:
+  ///   section: { "1": "Revelation", "2": "Belief", ... }
+  ///   section_detail: { "1": { "hadithnumber_first": 1, "hadithnumber_last": 7 }, ... }
+  Map<int, String> _buildSectionLookup(Map<String, dynamic> metadata) {
+    final sectionNames =
+        (metadata['section'] as Map<String, dynamic>?) ?? {};
+    final sectionDetails =
+        (metadata['section_detail'] as Map<String, dynamic>?) ?? {};
+
+    final lookup = <int, String>{};
+    for (final entry in sectionDetails.entries) {
+      final detail = (entry.value as Map<String, dynamic>?) ?? {};
+      final first = (detail['hadithnumber_first'] as num?)?.toInt() ?? 0;
+      final last = (detail['hadithnumber_last'] as num?)?.toInt() ?? 0;
+      final sectionName = sectionNames[entry.key]?.toString() ?? '';
+      for (var n = first; n <= last; n++) {
+        lookup[n] = sectionName;
+      }
+    }
+    return lookup;
   }
 }

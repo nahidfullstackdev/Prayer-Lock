@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/core/constants/api_constants.dart';
-import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/hadith/data/datasources/hadith_local_data_source.dart';
 import 'package:prayer_lock/features/hadith/data/datasources/hadith_remote_data_source.dart';
 import 'package:prayer_lock/features/hadith/data/repositories/hadith_repository_impl.dart';
@@ -13,9 +12,12 @@ import 'package:prayer_lock/features/hadith/presentation/providers/hadith_collec
 import 'package:prayer_lock/features/hadith/presentation/providers/hadith_list_notifier.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 
+export 'package:prayer_lock/features/hadith/presentation/providers/hadith_language_preferences_provider.dart';
+
 // ── HTTP client ───────────────────────────────────────────────────────────────
 
-/// Dio instance configured for the sunnah.com Hadith API.
+/// Dio instance configured for the fawazahmed0/hadith-api CDN.
+/// No authentication needed — entirely free and open.
 final hadithDioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
@@ -24,23 +26,9 @@ final hadithDioProvider = Provider<Dio>((ref) {
           const Duration(milliseconds: ApiConstants.connectionTimeout),
       receiveTimeout:
           const Duration(milliseconds: ApiConstants.receiveTimeout),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (ApiConstants.hadithApiKey.isNotEmpty)
-          'X-API-Key': ApiConstants.hadithApiKey,
-      },
+      headers: {'Accept': 'application/json'},
     ),
   );
-
-  if (ApiConstants.hadithApiKey.isEmpty) {
-    AppLogger.warning(
-      'SUNNAH_API_KEY not set — run with '
-      '--dart-define=SUNNAH_API_KEY=your_key '
-      'to enable live hadith fetching.',
-    );
-  }
-
   ref.onDispose(dio.close);
   return dio;
 });
@@ -91,11 +79,13 @@ final hadithCollectionsProvider =
 );
 
 /// Family provider keyed by collection name (e.g. 'bukhari').
+/// Automatically reloads when the user's selected languages change.
 final hadithListProvider = StateNotifierProvider.family<
     HadithListNotifier, HadithListState, String>(
   (ref, collection) => HadithListNotifier(
     collection: collection,
     isPro: ref.read(isProProvider),
+    ref: ref,
     getHadithsUseCase: ref.read(getHadithsUseCaseProvider),
     searchHadithsUseCase: ref.read(searchHadithsUseCaseProvider),
   ),

@@ -1,103 +1,97 @@
+import 'dart:convert';
+
 import 'package:prayer_lock/features/hadith/domain/entities/hadith.dart';
 
-/// Data model for a Hadith — handles JSON parsing and SQLite mapping.
+/// Data model for a Hadith — handles API JSON parsing and SQLite mapping.
+///
+/// When parsed from the CDN API, [translations] contains a single language key.
+/// When read from SQLite, [translations] contains all cached languages.
 class HadithModel extends Hadith {
   const HadithModel({
     required super.collection,
-    required super.bookNumber,
     required super.hadithNumber,
-    required super.textArabic,
-    required super.textEnglish,
-    required super.chapterTitle,
-    required super.chapterTitleArabic,
-    super.gradeEn,
-    super.gradeAr,
+    required super.arabicNumber,
+    required super.section,
+    required super.translations,
+    super.grade,
   });
 
-  // ── API (sunnah.com) ─────────────────────────────────────────────────────
+  // ── API (fawazahmed0/hadith-api — editions/{lang}-{book}.min.json) ────────
 
-  /// Parses one item from GET /collections/{name}/hadiths response data array.
-  factory HadithModel.fromJson(Map<String, dynamic> json) {
-    final langs = (json['hadith'] as List<dynamic>?) ?? [];
+  /// Parses one item from a CDN edition response hadiths array.
+  ///
+  /// [langCode] identifies the language of [json['text']].
+  /// [sectionLookup] maps hadith_number → section/chapter name.
+  static HadithModel fromApiJson(
+    Map<String, dynamic> json,
+    String collection,
+    String langCode,
+    Map<int, String> sectionLookup,
+  ) {
+    final hadithNumber = (json['hadithnumber'] as num?)?.toInt() ?? 0;
+    final arabicNumber =
+        (json['arabicnumber'] as num?)?.toInt() ?? hadithNumber;
+    final text = (json['text'] as String?) ?? '';
 
-    String arBody = '';
-    String enBody = '';
-    String arChapter = '';
-    String enChapter = '';
-    String? gradeEn;
-    String? gradeAr;
-
-    for (final lang in langs) {
-      final map = lang as Map<String, dynamic>;
-      final langCode = map['lang'] as String? ?? '';
-
-      if (langCode == 'ar') {
-        arBody = (map['body'] as String?) ?? '';
-        arChapter = (map['chapterTitle'] as String?) ?? '';
-        final grades = map['grades'] as List<dynamic>?;
-        if (grades != null && grades.isNotEmpty) {
-          gradeAr = (grades.first as Map<String, dynamic>)['grade'] as String?;
-        }
-      } else if (langCode == 'en') {
-        enBody = (map['body'] as String?) ?? '';
-        enChapter = (map['chapterTitle'] as String?) ?? '';
-        final grades = map['grades'] as List<dynamic>?;
-        if (grades != null && grades.isNotEmpty) {
-          gradeEn = (grades.first as Map<String, dynamic>)['grade'] as String?;
-        }
-      }
+    // Grade from grades array (e.g. [{"grade": "Sahih", "graded_by": "..."}])
+    final grades = (json['grades'] as List<dynamic>?) ?? [];
+    String? grade;
+    if (grades.isNotEmpty) {
+      grade =
+          (grades.first as Map<String, dynamic>)['grade'] as String?;
     }
 
+    final section = sectionLookup[hadithNumber] ?? '';
+
     return HadithModel(
-      collection: (json['collection'] as String?) ?? '',
-      bookNumber: (json['bookNumber'] as String?) ?? '',
-      hadithNumber: (json['hadithNumber'] as String?) ?? '',
-      textArabic: arBody,
-      textEnglish: enBody,
-      chapterTitle: enChapter,
-      chapterTitleArabic: arChapter,
-      gradeEn: gradeEn,
-      gradeAr: gradeAr,
+      collection: collection,
+      hadithNumber: hadithNumber,
+      arabicNumber: arabicNumber,
+      section: section,
+      translations: {langCode: text},
+      grade: grade,
     );
   }
 
   // ── SQLite ────────────────────────────────────────────────────────────────
 
-  Map<String, dynamic> toMap({required int page}) => {
+  Map<String, dynamic> toDbMap() => {
         'collection': collection,
-        'book_number': bookNumber,
         'hadith_number': hadithNumber,
-        'text_arabic': textArabic,
-        'text_english': textEnglish,
-        'chapter_title': chapterTitle,
-        'chapter_title_arabic': chapterTitleArabic,
-        'grade_en': gradeEn,
-        'grade_ar': gradeAr,
-        'page': page,
+        'arabic_number': arabicNumber,
+        'section': section,
+        'grade': grade,
+        'translations': jsonEncode(translations),
         'cached_at': DateTime.now().millisecondsSinceEpoch,
       };
 
-  factory HadithModel.fromMap(Map<String, dynamic> map) => HadithModel(
-        collection: map['collection'] as String,
-        bookNumber: map['book_number'] as String,
-        hadithNumber: map['hadith_number'] as String,
-        textArabic: map['text_arabic'] as String,
-        textEnglish: map['text_english'] as String,
-        chapterTitle: map['chapter_title'] as String,
-        chapterTitleArabic: map['chapter_title_arabic'] as String,
-        gradeEn: map['grade_en'] as String?,
-        gradeAr: map['grade_ar'] as String?,
-      );
+  factory HadithModel.fromDbMap(Map<String, dynamic> map) {
+    final translationsJson = (map['translations'] as String?) ?? '{}';
+    Map<String, dynamic> raw;
+    try {
+      raw = jsonDecode(translationsJson) as Map<String, dynamic>;
+    } catch (_) {
+      raw = {};
+    }
+    final translations = raw.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+
+    return HadithModel(
+      collection: map['collection'] as String,
+      hadithNumber: map['hadith_number'] as int,
+      arabicNumber:
+          (map['arabic_number'] as int?) ?? (map['hadith_number'] as int),
+      section: (map['section'] as String?) ?? '',
+      translations: translations,
+      grade: map['grade'] as String?,
+    );
+  }
 
   Hadith toEntity() => Hadith(
         collection: collection,
-        bookNumber: bookNumber,
         hadithNumber: hadithNumber,
-        textArabic: textArabic,
-        textEnglish: textEnglish,
-        chapterTitle: chapterTitle,
-        chapterTitleArabic: chapterTitleArabic,
-        gradeEn: gradeEn,
-        gradeAr: gradeAr,
+        arabicNumber: arabicNumber,
+        section: section,
+        translations: translations,
+        grade: grade,
       );
 }

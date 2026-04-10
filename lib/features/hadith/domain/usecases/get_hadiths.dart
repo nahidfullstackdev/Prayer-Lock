@@ -12,10 +12,12 @@ class GetHadithsUseCase {
     required String collection,
     required int page,
     required int limit,
+    required List<String> languages,
   }) =>
       repository.getHadiths(
         collection: collection,
         page: page,
         limit: limit,
+        languages: languages,
       );
 }

@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/features/hadith/domain/entities/hadith.dart';
+import 'package:prayer_lock/features/hadith/domain/entities/hadith_language.dart';
+import 'package:prayer_lock/features/hadith/presentation/providers/hadith_language_preferences_provider.dart';
 
-/// Expandable card that displays a single Hadith with Arabic + English text.
-class HadithCard extends StatefulWidget {
+/// Expandable card displaying a single Hadith in all user-selected languages.
+///
+/// Collapsed: shows the first selected language (Arabic if selected) limited
+/// to 3 lines. Expanded: shows all selected language texts with labels.
+class HadithCard extends ConsumerStatefulWidget {
   const HadithCard({
     required this.hadith,
     required this.index,
@@ -14,19 +20,25 @@ class HadithCard extends StatefulWidget {
   final int index;
 
   @override
-  State<HadithCard> createState() => _HadithCardState();
+  ConsumerState<HadithCard> createState() => _HadithCardState();
 }
 
-class _HadithCardState extends State<HadithCard> {
+class _HadithCardState extends ConsumerState<HadithCard> {
   bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final h = widget.hadith;
+    final selectedLanguages = ref.watch(hadithSelectedLanguagesProvider);
 
-    final bool hasGrade = h.gradeEn != null && h.gradeEn!.isNotEmpty;
-    final Color gradeColor = _gradeColor(h.gradeEn, cs);
+    // Build ordered list of languages that have text for this hadith
+    final activeLangs = selectedLanguages
+        .where((code) => (h.translations[code] ?? '').isNotEmpty)
+        .toList();
+
+    final bool hasGrade = h.grade != null && h.grade!.isNotEmpty;
+    final Color gradeColor = _gradeColor(h.grade, cs);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -43,7 +55,7 @@ class _HadithCardState extends State<HadithCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header ──────────────────────────────────────────────────
+              // ── Header row ───────────────────────────────────────────────
               Row(
                 children: [
                   Container(
@@ -56,7 +68,7 @@ class _HadithCardState extends State<HadithCard> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      h.hadithNumber,
+                      '${h.hadithNumber}',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -67,9 +79,7 @@ class _HadithCardState extends State<HadithCard> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      h.chapterTitle.isNotEmpty
-                          ? h.chapterTitle
-                          : 'Chapter ${h.bookNumber}',
+                      h.section.isNotEmpty ? h.section : 'Hadith ${h.hadithNumber}',
                       style: TextStyle(
                         fontSize: 12,
                         color: cs.onSurfaceVariant,
@@ -90,7 +100,7 @@ class _HadithCardState extends State<HadithCard> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        h.gradeEn!,
+                        h.grade!,
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -112,36 +122,43 @@ class _HadithCardState extends State<HadithCard> {
 
               const SizedBox(height: 12),
 
-              // ── Arabic text ──────────────────────────────────────────────
-              Text(
-                h.textArabic,
-                textDirection: TextDirection.rtl,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: 18,
-                  height: 1.9,
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w500,
+              // ── Primary language text (collapsed / first) ─────────────────
+              if (activeLangs.isNotEmpty) ...[
+                _TranslationBlock(
+                  langCode: activeLangs.first,
+                  text: h.translations[activeLangs.first]!,
+                  collapsed: !_expanded,
+                  showLabel: activeLangs.length > 1,
                 ),
-                maxLines: _expanded ? null : 3,
-                overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-              ),
-
-              // ── English text (only when expanded) ───────────────────────
-              if (_expanded) ...[
-                const SizedBox(height: 12),
-                Divider(color: cs.outlineVariant, height: 1),
-                const SizedBox(height: 12),
+              ] else ...[
                 Text(
-                  h.textEnglish,
+                  'No translation available',
                   style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: cs.onSurface.withValues(alpha: 0.85),
+                    fontSize: 13,
+                    color: cs.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
                   ),
                 ),
+              ],
+
+              // ── Expanded: remaining languages + actions ───────────────────
+              if (_expanded && activeLangs.length > 1) ...[
+                for (final langCode in activeLangs.skip(1)) ...[
+                  const SizedBox(height: 12),
+                  Divider(color: cs.outlineVariant, height: 1),
+                  const SizedBox(height: 12),
+                  _TranslationBlock(
+                    langCode: langCode,
+                    text: h.translations[langCode]!,
+                    collapsed: false,
+                    showLabel: true,
+                  ),
+                ],
+              ],
+
+              if (_expanded) ...[
                 const SizedBox(height: 12),
-                // ── Actions ────────────────────────────────────────────
+                // ── Actions ────────────────────────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -149,11 +166,11 @@ class _HadithCardState extends State<HadithCard> {
                       icon: Icons.copy_rounded,
                       label: 'Copy',
                       onTap: () {
-                        Clipboard.setData(
-                          ClipboardData(
-                            text: '${h.textArabic}\n\n${h.textEnglish}',
-                          ),
-                        );
+                        final text = activeLangs
+                            .map((c) => h.translations[c] ?? '')
+                            .where((t) => t.isNotEmpty)
+                            .join('\n\n');
+                        Clipboard.setData(ClipboardData(text: text));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Hadith copied'),
@@ -181,6 +198,68 @@ class _HadithCardState extends State<HadithCard> {
     return cs.secondary;
   }
 }
+
+// ─── Translation text block ───────────────────────────────────────────────────
+
+class _TranslationBlock extends StatelessWidget {
+  const _TranslationBlock({
+    required this.langCode,
+    required this.text,
+    required this.collapsed,
+    required this.showLabel,
+  });
+
+  final String langCode;
+  final String text;
+  final bool collapsed;
+  final bool showLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final lang = HadithLanguage.fromCode(langCode);
+    final isRtl = lang?.isRtl ?? false;
+    final textDirection =
+        isRtl ? TextDirection.rtl : TextDirection.ltr;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showLabel)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              lang?.name ?? langCode.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: cs.secondary.withValues(alpha: 0.7),
+                letterSpacing: 0.8,
+              ),
+            ),
+          ),
+        Text(
+          text,
+          textDirection: textDirection,
+          textAlign: isRtl ? TextAlign.right : TextAlign.left,
+          style: TextStyle(
+            fontSize: isRtl ? 18 : 14,
+            height: isRtl ? 1.9 : 1.6,
+            color: isRtl
+                ? cs.onSurface
+                : cs.onSurface.withValues(alpha: 0.85),
+            fontWeight: isRtl ? FontWeight.w500 : FontWeight.normal,
+          ),
+          maxLines: collapsed ? 3 : null,
+          overflow:
+              collapsed ? TextOverflow.ellipsis : TextOverflow.visible,
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Action button ────────────────────────────────────────────────────────────
 
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
@@ -219,6 +298,8 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
+
+// ─── Pro locked card ──────────────────────────────────────────────────────────
 
 /// Paywall teaser card shown after the free hadith limit.
 class HadithProLockedCard extends StatelessWidget {

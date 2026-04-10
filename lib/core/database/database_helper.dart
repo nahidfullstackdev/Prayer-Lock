@@ -31,7 +31,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onOpen: _onOpen,
@@ -46,11 +46,11 @@ class DatabaseHelper {
     );
     if (tables.isEmpty) {
       AppLogger.warning('Core tables missing — recreating schema');
-      await _onCreate(db, 3);
+      await _onCreate(db, 4);
     }
   }
 
-  /// Create database tables (version 3 — Quran + Hadith)
+  /// Create database tables (version 4 — Quran + Hadith multi-language)
   Future<void> _onCreate(Database db, int version) async {
     AppLogger.info('Creating database tables (v$version)');
 
@@ -133,34 +133,27 @@ class DatabaseHelper {
         title TEXT NOT NULL,
         title_arabic TEXT NOT NULL,
         total_hadith INTEGER NOT NULL,
+        available_languages TEXT NOT NULL DEFAULT '',
         cached_at INTEGER NOT NULL
       )
     ''');
 
-    // Hadiths table
+    // Hadiths table — multi-language, paginated locally from SQLite
     await db.execute('''
       CREATE TABLE IF NOT EXISTS hadiths (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
         collection TEXT NOT NULL,
-        book_number TEXT NOT NULL,
-        hadith_number TEXT NOT NULL,
-        text_arabic TEXT NOT NULL,
-        text_english TEXT NOT NULL,
-        chapter_title TEXT NOT NULL,
-        chapter_title_arabic TEXT NOT NULL,
-        grade_en TEXT,
-        grade_ar TEXT,
-        page INTEGER NOT NULL DEFAULT 1,
+        hadith_number INTEGER NOT NULL,
+        arabic_number INTEGER NOT NULL DEFAULT 0,
+        section TEXT NOT NULL DEFAULT '',
+        grade TEXT,
+        translations TEXT NOT NULL DEFAULT '{}',
         cached_at INTEGER NOT NULL,
-        UNIQUE(collection, hadith_number)
+        PRIMARY KEY (collection, hadith_number)
       )
     ''');
 
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_hadiths_collection ON hadiths(collection)',
-    );
-    await db.execute(
-      'CREATE INDEX IF NOT EXISTS idx_hadiths_collection_page ON hadiths(collection, page)',
     );
 
     AppLogger.info('Database tables created successfully');
@@ -184,7 +177,7 @@ class DatabaseHelper {
     }
 
     if (oldVersion < 3) {
-      // v2 → v3: add hadith_collections and hadiths tables
+      // v2 → v3: add hadith_collections and hadiths tables (old schema)
       await db.execute('''
         CREATE TABLE IF NOT EXISTS hadith_collections (
           name TEXT PRIMARY KEY,
@@ -221,6 +214,42 @@ class DatabaseHelper {
       );
 
       AppLogger.info('v2→v3: added hadith_collections and hadiths tables');
+    }
+
+    if (oldVersion < 4) {
+      // v3 → v4: new hadith API (fawazahmed0) — multi-language translations.
+      // Hadiths table completely rebuilt; dropping is safe (only cached data).
+      await db.execute('DROP TABLE IF EXISTS hadiths');
+      await db.execute('DROP INDEX IF EXISTS idx_hadiths_collection');
+      await db.execute('DROP INDEX IF EXISTS idx_hadiths_collection_page');
+
+      // Add available_languages column to hadith_collections (may already exist)
+      try {
+        await db.execute(
+          'ALTER TABLE hadith_collections ADD COLUMN available_languages TEXT NOT NULL DEFAULT ""',
+        );
+      } catch (_) {
+        // Column already exists in fresh installs that ran _onCreate at v4
+      }
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS hadiths (
+          collection TEXT NOT NULL,
+          hadith_number INTEGER NOT NULL,
+          arabic_number INTEGER NOT NULL DEFAULT 0,
+          section TEXT NOT NULL DEFAULT '',
+          grade TEXT,
+          translations TEXT NOT NULL DEFAULT '{}',
+          cached_at INTEGER NOT NULL,
+          PRIMARY KEY (collection, hadith_number)
+        )
+      ''');
+
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_hadiths_collection ON hadiths(collection)',
+      );
+
+      AppLogger.info('v3→v4: rebuilt hadiths table for multi-language support');
     }
   }
 

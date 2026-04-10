@@ -1,25 +1,31 @@
-/// A single Hadith entry
+/// A single Hadith entry with multi-language support.
 class Hadith {
-  final String collection; // e.g. 'bukhari'
-  final String bookNumber;
-  final String hadithNumber;
-  final String textArabic;
-  final String textEnglish;
-  final String chapterTitle; // English
-  final String chapterTitleArabic;
-  final String? gradeEn; // e.g. 'Sahih'
-  final String? gradeAr; // e.g. 'صحيح'
+  /// Book key, e.g. 'bukhari', 'muslim'
+  final String collection;
+
+  /// Primary hadith number (used for ordering and caching)
+  final int hadithNumber;
+
+  /// Arabic numbering (may differ from hadithNumber in some editions)
+  final int arabicNumber;
+
+  /// Chapter / section title (sourced from the English edition)
+  final String section;
+
+  /// Language code → translated text.
+  /// Keys match [HadithLanguage.code]: 'ara', 'eng', 'ben', etc.
+  final Map<String, String> translations;
+
+  /// Authenticity grade, e.g. 'Sahih', 'Hasan', 'Da\'if' (null if ungraded)
+  final String? grade;
 
   const Hadith({
     required this.collection,
-    required this.bookNumber,
     required this.hadithNumber,
-    required this.textArabic,
-    required this.textEnglish,
-    required this.chapterTitle,
-    required this.chapterTitleArabic,
-    this.gradeEn,
-    this.gradeAr,
+    required this.arabicNumber,
+    required this.section,
+    required this.translations,
+    this.grade,
   });
 
   @override

@@ -6,28 +6,28 @@ class ApiConstants {
   /// Al-Quran Cloud API base URL
   static const String quranApiBaseUrl = 'https://api.alquran.cloud/v1';
 
-  /// Sunnah.com Hadith API base URL
-  static const String hadithApiBaseUrl = 'https://api.sunnah.com/v1';
+  // ── Hadith (fawazahmed0/hadith-api) ───────────────────────────────────────
 
-  /// Sunnah.com API key — set via: flutter run --dart-define=SUNNAH_API_KEY=your_key
-  /// Get a free key at https://sunnah.com/developers
-  static const String hadithApiKey = String.fromEnvironment(
-    'SUNNAH_API_KEY',
-    defaultValue: '',
-  );
+  /// CDN base URL — free, no authentication required.
+  /// Source: https://github.com/fawazahmed0/hadith-api
+  static const String hadithApiBaseUrl =
+      'https://cdn.jsdelivr.net/gh/fawazahmed0/hadith-api@1';
 
-  /// Hadith collections endpoint
-  static const String hadithCollectionsEndpoint = '/collections';
+  /// All available editions (collections × languages) metadata.
+  static const String hadithEditionsEndpoint = '/editions.min.json';
 
-  /// Hadith list endpoint for a collection (paginated)
-  static String hadithListEndpoint(String collection) =>
-      '/collections/$collection/hadiths';
+  /// Full edition endpoint — all hadiths for one book+language combination.
+  /// [editionName] format: '{langCode}-{bookKey}' e.g. 'eng-bukhari', 'ara-muslim'
+  static String hadithEditionEndpoint(String editionName) =>
+      '/editions/$editionName.min.json';
 
-  /// Default page size for free tier
+  /// Default page size for free tier (local pagination from SQLite cache)
   static const int hadithFreePageSize = 10;
 
   /// Default page size for pro tier
   static const int hadithProPageSize = 20;
+
+  // ── Quran ─────────────────────────────────────────────────────────────────
 
   /// Get all Surahs endpoint
   static const String getAllSurahsEndpoint = '/surah';
@@ -44,10 +44,6 @@ class ApiConstants {
   // ── Dua ───────────────────────────────────────────────────────────────────
 
   /// Dua data is bundled locally in assets/data/duas.json (offline-first).
-  /// Source: Hisnul Muslim (Fortress of the Muslim) by Sa'id bin Wahf Al-Qahtani.
-  ///
-  /// Future remote API candidate: https://api.hisnmuslim.com
-  /// (no authentication required, community-maintained)
   static const String duaAssetPath = 'assets/data/duas.json';
 
   // ── Timeouts ──────────────────────────────────────────────────────────────
@@ -55,6 +51,6 @@ class ApiConstants {
   /// Connection timeout in milliseconds
   static const int connectionTimeout = 30000;
 
-  /// Receive timeout in milliseconds
-  static const int receiveTimeout = 30000;
+  /// Receive timeout in milliseconds — extended for large collection files (~2 MB each)
+  static const int receiveTimeout = 60000;
 }
