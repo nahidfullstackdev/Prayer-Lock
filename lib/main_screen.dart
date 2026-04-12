@@ -3,7 +3,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:prayer_lock/core/theme/theme_provider.dart';
+import 'package:prayer_lock/features/app_blocker/presentation/providers/app_blocker_providers.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
 import 'package:prayer_lock/features/dua_dhikr/presentation/screens/duadhikr_screen.dart';
 import 'package:prayer_lock/features/hadith/presentation/screens/hadith_screen.dart';
@@ -11,11 +14,19 @@ import 'package:prayer_lock/features/home/presentation/screens/home_screen.dart'
 import 'package:prayer_lock/features/prayer_times/presentation/providers/prayer_times_providers.dart';
 import 'package:prayer_lock/features/quran/presentation/screens/quran_home_screen.dart';
 import 'package:prayer_lock/main.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class MainScreen extends ConsumerWidget {
+// Keep in sync with version in pubspec.yaml
+const String _kAppVersion = '1.0.1';
+
+class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
 
+  @override
+  ConsumerState<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends ConsumerState<MainScreen>
+    with WidgetsBindingObserver {
   static const List<Widget> _screens = [
     HomeScreen(),
     QuranHomeScreen(),
@@ -24,8 +35,86 @@ class MainScreen extends ConsumerWidget {
     MoreScreen(),
   ];
 
+  /// True while the user is inside a special-permission Settings page that we
+  /// opened. When they return (AppLifecycleState.resumed) we re-check and
+  /// re-show the sheet only in that case, avoiding annoying repeated prompts.
+  bool _openedSpecialSettings = false;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrapPermissions());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Only re-evaluate when we know the user came back from a Settings page
+    // that we explicitly sent them to.
+    if (state == AppLifecycleState.resumed && _openedSpecialSettings) {
+      _openedSpecialSettings = false;
+      if (Platform.isAndroid) _checkAndMaybeShowSpecialPermsSheet();
+    }
+  }
+
+  // ── Permission bootstrap ─────────────────────────────────────────────────────
+
+  Future<void> _bootstrapPermissions() async {
+    if (!mounted) return;
+
+    // Standard permissions: system handles duplicates; no-op if already granted.
+    await [
+      Permission.notification,
+      Permission.locationWhenInUse,
+    ].request();
+
+    // Special Android permissions require the user to visit a Settings page.
+    if (Platform.isAndroid && mounted) {
+      await _checkAndMaybeShowSpecialPermsSheet();
+    }
+  }
+
+  Future<void> _checkAndMaybeShowSpecialPermsSheet() async {
+    if (!mounted) return;
+    final repo = ref.read(appBlockerRepositoryProvider);
+    final hasUsage =
+        (await repo.hasUsageStatsPermission()).fold((_) => false, (v) => v);
+    final hasOverlay =
+        (await repo.hasOverlayPermission()).fold((_) => false, (v) => v);
+    if (hasUsage && hasOverlay) return;
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _SpecialPermissionsSheet(
+        hasUsageStats: hasUsage,
+        hasOverlay: hasOverlay,
+        onGrantUsage: () {
+          _openedSpecialSettings = true;
+          Navigator.pop(sheetCtx);
+          repo.openUsageStatsSettings();
+        },
+        onGrantOverlay: () {
+          _openedSpecialSettings = true;
+          Navigator.pop(sheetCtx);
+          repo.openOverlaySettings();
+        },
+      ),
+    );
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
     final selectedIndex = ref.watch(selectedTabProvider);
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -351,7 +440,7 @@ class MoreScreen extends ConsumerWidget {
           ),
 
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             sliver: SliverToBoxAdapter(
               child: Container(
                 decoration: BoxDecoration(
@@ -483,6 +572,20 @@ class MoreScreen extends ConsumerWidget {
               ),
             ),
           ),
+          // ── Version footer ────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 20, bottom: 36),
+              child: Text(
+                'Prayer Lock v$_kAppVersion',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -538,6 +641,244 @@ class _MoreRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Special Permissions Sheet ────────────────────────────────────────────────
+//
+// Shown once on first launch (Android only) when Usage Access and/or Display
+// Over Other Apps have not been granted. Each row sends the user to the
+// relevant system settings page. The parent re-checks on return and only
+// re-shows if permissions are still missing.
+
+class _SpecialPermissionsSheet extends StatelessWidget {
+  const _SpecialPermissionsSheet({
+    required this.hasUsageStats,
+    required this.hasOverlay,
+    required this.onGrantUsage,
+    required this.onGrantOverlay,
+  });
+
+  final bool hasUsageStats;
+  final bool hasOverlay;
+  final VoidCallback onGrantUsage;
+  final VoidCallback onGrantOverlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = isDark ? const Color(0xFF0F1E2D) : cs.surface;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.security_rounded,
+                      color: Color(0xFFF59E0B),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Permissions Required',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Needed for the App Blocker to work correctly.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Permission rows
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? cs.surfaceContainer.withValues(alpha: 0.55)
+                      : cs.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant),
+                ),
+                child: Column(
+                  children: [
+                    if (!hasUsageStats) ...[
+                      _PermRow(
+                        icon: Icons.query_stats_rounded,
+                        title: 'Usage Access',
+                        subtitle:
+                            'Detects which app is in the foreground so Prayer Lock can block it during Salah.',
+                        cs: cs,
+                        onGrant: onGrantUsage,
+                      ),
+                      if (!hasOverlay)
+                        Divider(
+                          height: 1,
+                          indent: 16,
+                          color: cs.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                    ],
+                    if (!hasOverlay)
+                      _PermRow(
+                        icon: Icons.layers_rounded,
+                        title: 'Display Over Other Apps',
+                        subtitle:
+                            'Shows the prayer reminder on top of blocked apps so you can confirm you prayed.',
+                        cs: cs,
+                        onGrant: onGrantOverlay,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Skip link
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Skip for now',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PermRow extends StatelessWidget {
+  const _PermRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.cs,
+    required this.onGrant,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final ColorScheme cs;
+  final VoidCallback onGrant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: const Color(0xFFF59E0B), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onGrant,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFF59E0B),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'Grant',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }

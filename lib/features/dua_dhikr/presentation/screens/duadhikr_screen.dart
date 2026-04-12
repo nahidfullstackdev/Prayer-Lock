@@ -6,6 +6,7 @@ import 'package:prayer_lock/features/dua_dhikr/domain/entities/dua_category.dart
 import 'package:prayer_lock/features/dua_dhikr/presentation/providers/dua_providers.dart';
 import 'package:prayer_lock/features/dua_dhikr/presentation/screens/dua_detail_screen.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
 
 class DuaDhikrScreen extends ConsumerStatefulWidget {
   const DuaDhikrScreen({super.key});
@@ -172,7 +173,15 @@ class _DuaDhikrScreenState extends ConsumerState<DuaDhikrScreen> {
                   category: cat,
                   locked: locked,
                   onTap: locked
-                      ? () => _showProDialog(context, cs)
+                      ? () => showProPaywall(
+                            context,
+                            ref.read(subscriptionRepositoryProvider),
+                            placement: 'dua_locked',
+                            featureTitle: 'Dua Categories',
+                            featureDescription:
+                                'Unlock Travel, Health & Illness, Seeking '
+                                'Forgiveness, Anxiety & Worry, and more.',
+                          )
                       : () => _openCategory(context, cat),
                 );
               },
@@ -192,73 +201,6 @@ class _DuaDhikrScreenState extends ConsumerState<DuaDhikrScreen> {
     );
   }
 
-  void _showProDialog(BuildContext context, ColorScheme cs) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Icon(Icons.lock_rounded, color: cs.secondary, size: 40),
-            const SizedBox(height: 12),
-            Text(
-              'Pro Feature',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: cs.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Unlock 5 additional dua categories — Travel, Health & Illness, '
-              'Seeking Forgiveness, Anxiety & Worry, and Entering/Leaving Places '
-              '— with Prayer Lock Pro.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: cs.onSurfaceVariant,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // TODO: trigger RevenueCat paywall
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.secondary,
-                foregroundColor: cs.onSecondary,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Upgrade to Pro',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 // ─── Tasbih counter widget ────────────────────────────────────────────────────

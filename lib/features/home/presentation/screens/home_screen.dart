@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/core/widgets/adhan_test_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/location_notifier.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/prayer_times_notifier.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/prayer_times_providers.dart';
+import 'package:prayer_lock/features/prayer_times/presentation/widgets/qibla_compass_sheet.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
 import 'package:prayer_lock/main.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -21,6 +25,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  // Guards against requesting the notification permission more than once per
+  // session. A SharedPreferences flag (`_kNotifPermKey`) persists this across
+  // restarts so the system dialog is never shown twice.
+  bool _notifPermTriggered = false;
+  static const String _kNotifPermKey = 'notification_permission_requested';
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +41,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.025).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    // Post-onboarding case: user is already Pro when the home screen first
+    // mounts (they just completed the paywall). The post-frame delay ensures
+    // the UI has settled before the system dialog appears.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (ref.read(isProProvider)) _maybeRequestNotifPermission();
+    });
+  }
+
+  /// Requests POST_NOTIFICATIONS permission exactly once.
+  ///
+  /// No-ops if the permission was already requested in a previous session
+  /// (persisted via SharedPreferences) or if it was already triggered this
+  /// session (in-memory guard).
+  Future<void> _maybeRequestNotifPermission() async {
+    if (_notifPermTriggered) return;
+    _notifPermTriggered = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_kNotifPermKey) ?? false) return;
+    await prefs.setBool(_kNotifPermKey, true);
+
+    if (!mounted) return;
+    await ref.read(notificationServiceProvider).requestPermissions();
   }
 
   @override
@@ -43,6 +77,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final prayerState = ref.watch(prayerTimesProvider);
     final locationState = ref.watch(locationProvider);
+
+    // In-app upgrade case: free user subscribes while already past onboarding.
+    ref.listen<bool>(isProProvider, (previous, current) {
+      if (current && previous == false) _maybeRequestNotifPermission();
+    });
 
     return Scaffold(
       body: CustomScrollView(
@@ -58,10 +97,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 children: [
                   _buildQuickAccess(context),
                   const SizedBox(height: 20),
-                  if (!ref.watch(isProProvider)) ...[
-                    _buildProBanner(context),
-                    const SizedBox(height: 20),
-                  ],
+                  // if (!ref.watch(isProProvider)) ...[
+                  //   _buildProBanner(context),
+                  //   const SizedBox(height: 20),
+                  // ],
                   _buildPrayerTimesList(context, prayerState),
                   const SizedBox(height: 20),
                   _buildVerseOfTheDay(context),
@@ -356,31 +395,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Widget _buildQuickAccess(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final items = [
+    final quickItems = [
       _QuickItem(Icons.menu_book_rounded, 'Quran', cs.primary, 1),
       _QuickItem(Icons.format_list_bulleted_rounded, 'Hadith', cs.secondary, 2),
       _QuickItem(Icons.volunteer_activism_rounded, 'Duas', cs.tertiary, 3),
       const _QuickItem(Icons.nightlight_round, 'Dhikr', Color(0xFF7C3AED), 3),
     ];
 
-    return Row(
-      children:
-          items
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Feature Action Cards ──────────────────────────────────────────
+        Row(
+          children: [
+            Expanded(
+              child: _buildFeatureCard(
+                gradientColors: isDark
+                    ? [const Color(0xFF052E16), const Color(0xFF14532D)]
+                    : [const Color(0xFF15803D), const Color(0xFF166534)],
+                borderColor: cs.primary.withValues(alpha: 0.35),
+                icon: Icons.shield_rounded,
+                bgIcon: Icons.shield_outlined,
+                title: 'App Blocker',
+                subtitle: 'Block distracting\napps during prayer',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AppBlockerScreen(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildFeatureCard(
+                gradientColors: isDark
+                    ? [const Color(0xFF042F2E), const Color(0xFF134E4A)]
+                    : [const Color(0xFF0F766E), const Color(0xFF0D9488)],
+                borderColor: cs.tertiary.withValues(alpha: 0.35),
+                icon: Icons.explore_rounded,
+                bgIcon: Icons.explore_outlined,
+                title: 'Find Qibla',
+                subtitle: 'Face the direction\nof the holy Kaaba',
+                onTap: () => showQiblaSheet(context),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // ── Quick Nav ─────────────────────────────────────────────────────
+        Row(
+          children: quickItems
               .map(
                 (item) => Expanded(
                   child: GestureDetector(
-                    onTap:
-                        () =>
-                            ref.read(selectedTabProvider.notifier).state =
-                                item.tabIndex,
+                    onTap: () =>
+                        ref.read(selectedTabProvider.notifier).state =
+                            item.tabIndex,
                     child: Column(
                       children: [
                         Container(
-                          width: 56,
-                          height: 56,
+                          width: 54,
+                          height: 54,
                           decoration: BoxDecoration(
-                            color: item.color.withValues(alpha: 0.12),
+                            color: item.color.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: item.color.withValues(alpha: 0.15),
@@ -403,6 +483,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               )
               .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureCard({
+    required List<Color> gradientColors,
+    required Color borderColor,
+    required IconData icon,
+    required IconData bgIcon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradientColors,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -12,
+              bottom: -12,
+              child: Icon(
+                bgIcon,
+                size: 84,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 10.5,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                        size: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -758,9 +931,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return GestureDetector(
       onTap:
-          () => ref
-              .read(subscriptionRepositoryProvider)
-              .register('home_upgrade_cta'),
+          () => showProPaywall(
+            context,
+            ref.read(subscriptionRepositoryProvider),
+            placement: 'home_upgrade_cta',
+          ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(

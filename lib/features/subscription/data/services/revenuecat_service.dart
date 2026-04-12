@@ -5,10 +5,9 @@ import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/subscription/domain/entities/subscription_status.dart';
 import 'package:prayer_lock/features/subscription/domain/repositories/subscription_repository.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
-import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 
 /// Concrete implementation of [SubscriptionRepository] backed by RevenueCat
-/// (purchases_flutter ^8.x + purchases_ui_flutter ^8.x).
+/// (purchases_flutter).
 ///
 /// ── Singleton ─────────────────────────────────────────────────────────────
 /// A singleton so the same listener registered in [configure] keeps
@@ -18,8 +17,6 @@ import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 /// 1. Replace [_iosApiKey] / [_androidApiKey] with your RevenueCat API keys.
 /// 2. In the RevenueCat dashboard, create an entitlement named [_entitlementId]
 ///    and attach your App Store / Google Play subscription products to it.
-/// 3. Create a Paywall in RevenueCat dashboard → Paywalls (no-code builder).
-/// 4. Set that paywall as the default for your offering.
 class RevenueCatService implements SubscriptionRepository {
   // ── Singleton ──────────────────────────────────────────────────────────────
   static final RevenueCatService _instance = RevenueCatService._internal();
@@ -85,16 +82,34 @@ class RevenueCatService implements SubscriptionRepository {
   @override
   Stream<AppSubscriptionStatus> get statusStream => _statusController.stream;
 
-  /// Shows the RevenueCat paywall if the user does not have the [_entitlementId]
-  /// entitlement. The [placement] parameter is accepted for interface
-  /// compatibility but ignored — RevenueCat uses offerings, not placements.
+  /// Fetches the current RevenueCat offering and purchases the package that
+  /// matches [planId] (`'monthly'` or `'lifetime'`). Falls back to the first
+  /// available package if no exact match is found. Resolves silently on user
+  /// cancellation; rethrows on billing / network errors.
   @override
-  Future<void> register(String placement) async {
-    AppLogger.info('RevenueCat presentPaywall (placement: $placement)');
+  Future<void> purchase(String planId) async {
+    AppLogger.info('RevenueCat purchase (plan: $planId)');
     try {
-      await RevenueCatUI.presentPaywallIfNeeded(_entitlementId);
+      final offerings = await Purchases.getOfferings();
+      final current = offerings.current;
+      if (current == null) {
+        AppLogger.warning('No current RevenueCat offering available');
+        return;
+      }
+
+      Package? package =
+          planId == 'lifetime' ? current.lifetime : current.monthly;
+      package ??= current.availablePackages.firstOrNull;
+
+      if (package == null) {
+        AppLogger.warning('No package found for plan: $planId');
+        return;
+      }
+
+      final result = await Purchases.purchase(PurchaseParams.package(package));
+      _onCustomerInfoUpdate(result.customerInfo);
     } catch (e) {
-      AppLogger.error('RevenueCat presentPaywall failed', e);
+      AppLogger.error('RevenueCat purchase failed', e);
     }
   }
 

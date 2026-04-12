@@ -137,4 +137,30 @@ class AppBlockerRepositoryImpl implements AppBlockerRepository {
       return Left(UnknownFailure(e.toString()));
     }
   }
+
+  @override
+  Either<Failure, ({bool hasUsageStats, bool hasOverlay})>
+  getCachedPermissions() {
+    try {
+      return Right(localDataSource.getCachedPermissions());
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> savePermissions({
+    required bool hasUsageStats,
+    required bool hasOverlay,
+  }) async {
+    try {
+      await localDataSource.savePermissions(
+        hasUsageStats: hasUsageStats,
+        hasOverlay: hasOverlay,
+      );
+      return const Right(unit);
+    } catch (e) {
+      return Left(CacheFailure(e.toString()));
+    }
+  }
 }

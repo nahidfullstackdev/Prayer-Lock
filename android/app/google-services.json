@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "623519534939",
+    "firebase_url": "https://prayer-lock-fa061-default-rtdb.firebaseio.com",
+    "project_id": "prayer-lock-fa061",
+    "storage_bucket": "prayer-lock-fa061.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:623519534939:android:a006ca2492b37a51b0547e",
+        "android_client_info": {
+          "package_name": "com.mdnahid.prayerlock"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "623519534939-u4abkh27e282te9eo66g7lhcalgs85u6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDAZxv3IU-fvOYbgLmDkfecJ_xoDC4VT8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "623519534939-u4abkh27e282te9eo66g7lhcalgs85u6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "623519534939-tnpngbe6g4m6cseminale37543t6h601.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mdnahid.prayerlock"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

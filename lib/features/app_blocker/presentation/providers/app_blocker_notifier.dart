@@ -88,10 +88,23 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
   Future<void> initialize() async {
     if (state.isLoadingApps) return;
 
-    // Fast: load saved packages and check permissions/service status
+    // Instant: apply Hive-cached permissions so the UI is responsive immediately,
+    // before the async native checks complete.
+    final cached = repository.getCachedPermissions();
+    cached.fold(
+      (_) {},
+      (perms) => state = state.copyWith(
+        hasUsageStatsPermission: perms.hasUsageStats,
+        hasOverlayPermission: perms.hasOverlay,
+      ),
+    );
+
+    // Fast: load saved blocked packages from Hive
     final packagesResult = await getBlockedPackagesUseCase();
     final packages = packagesResult.fold((_) => <String>[], (l) => l);
 
+    // Authoritative: verify permissions + service state from native side
+    // and persist the result back to Hive.
     await _updatePermissionsAndServiceState(packages.toSet());
 
     // Slow: fetch installed apps from native side
@@ -122,12 +135,22 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
     final overlayResult = await repository.hasOverlayPermission();
     final serviceResult = await repository.isBlockerServiceRunning();
 
+    final hasUsage = usageResult.fold((_) => false, (v) => v);
+    final hasOverlay = overlayResult.fold((_) => false, (v) => v);
+
     state = state.copyWith(
       blockedPackages: packages,
-      hasUsageStatsPermission: usageResult.fold((_) => false, (v) => v),
-      hasOverlayPermission: overlayResult.fold((_) => false, (v) => v),
+      hasUsageStatsPermission: hasUsage,
+      hasOverlayPermission: hasOverlay,
       isServiceRunning: serviceResult.fold((_) => false, (v) => v),
       errorMessage: null,
+    );
+
+    // Persist the verified permission state to Hive so the next launch
+    // can show the correct UI instantly before native checks complete.
+    await repository.savePermissions(
+      hasUsageStats: hasUsage,
+      hasOverlay: hasOverlay,
     );
   }
 

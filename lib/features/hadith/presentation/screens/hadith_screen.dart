@@ -4,6 +4,7 @@ import 'package:prayer_lock/features/hadith/domain/entities/hadith_collection.da
 import 'package:prayer_lock/features/hadith/presentation/providers/hadith_providers.dart';
 import 'package:prayer_lock/features/hadith/presentation/screens/hadith_list_screen.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
 
 /// Hadith home screen: shows all supported collections and navigates into each.
 class HadithScreen extends ConsumerStatefulWidget {
@@ -142,7 +143,15 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
                   collection: c,
                   locked: locked,
                   onTap: locked
-                      ? () => _showProDialog(context, cs)
+                      ? () => showProPaywall(
+                            context,
+                            ref.read(subscriptionRepositoryProvider),
+                            placement: 'hadith_locked',
+                            featureTitle: 'Hadith Collections',
+                            featureDescription:
+                                'Browse all 10 authenticated collections — '
+                                'Tirmidhi, Abu Dawud, Nasai, Ibn Majah, and more.',
+                          )
                       : () => _openCollection(context, c),
                 );
               },
@@ -158,74 +167,6 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
       context,
       MaterialPageRoute<void>(
         builder: (_) => HadithListScreen(collection: collection),
-      ),
-    );
-  }
-
-  void _showProDialog(BuildContext context, ColorScheme cs) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Icon(Icons.lock_rounded, color: cs.secondary, size: 40),
-            const SizedBox(height: 12),
-            Text(
-              'Pro Feature',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: cs.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Unlock all 10 hadith collections with Prayer Lock Pro. '
-              'Browse thousands of authenticated hadiths from the major '
-              'books of Sunnah in multiple languages.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: cs.onSurfaceVariant,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // TODO: trigger RevenueCat paywall
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: cs.secondary,
-                foregroundColor: cs.onSecondary,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Upgrade to Pro',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
