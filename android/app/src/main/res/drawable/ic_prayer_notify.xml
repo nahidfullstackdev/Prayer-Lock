@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Crescent moon — used as the small notification icon for prayer alarms.
+  Must be white/transparent so it renders correctly on the notification shade.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M12,11.807A9.002,9.002 0,0,1 15.709,2.145A9.001,9.001 0,0,0 6,12c0,4.97 4.03,9 9,9 3.093,0 5.802,-1.573 7.387,-3.963A9.011,9.011 0,0,1 12,11.807z"/>
+</vector>

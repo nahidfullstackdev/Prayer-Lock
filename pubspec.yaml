@@ -96,8 +96,24 @@ dev_dependencies:
   hive_generator: ^2.0.1
   riverpod_generator: ^2.6.2
 
+  # App icon generation — run with: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
   # Testing
   mockito: ^5.4.4
+
+# ─── App launcher icons ─────────────────────────────────────────────────────
+# Regenerate after changing the source image:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/images/logo/prayer-lock-icon.png"
+  min_sdk_android: 26
+  remove_alpha_ios: true
+  background_color_ios: "#E8E2CF"
+  adaptive_icon_background: "#E8E2CF"
+  adaptive_icon_foreground: "assets/images/logo/prayer-lock-icon.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -115,6 +131,7 @@ flutter:
     - assets/images/
     - assets/images/icons/
     - assets/images/backgrounds/
+    - assets/images/logo/
     - assets/audio/adhan/
     - assets/databases/
     - assets/data/

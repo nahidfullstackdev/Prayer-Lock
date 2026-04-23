@@ -662,6 +662,44 @@ class _GlowIcon extends StatelessWidget {
   }
 }
 
+class _GlowLogo extends StatelessWidget {
+  const _GlowLogo({this.size = 110});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size * 1.5,
+      height: size * 1.5,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: size * 1.5,
+            height: size * 1.5,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  AppTheme.emerald.withValues(alpha: 0.22),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          Image.asset(
+            'assets/images/logo/prayer-lock-icon.png',
+            width: size,
+            height: size,
+            filterQuality: FilterQuality.high,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Page 0: Intro ────────────────────────────────────────────────────────────
 
 class _IntroPage extends StatelessWidget {
@@ -679,7 +717,7 @@ class _IntroPage extends StatelessWidget {
             child: Column(
               children: [
                 const SizedBox(height: 8),
-                const _GlowIcon(icon: Icons.mosque_rounded, size: 90, iconSize: 44),
+                const _GlowLogo(size: 110),
                 const SizedBox(height: 20),
                 const Text(
                   'بِسْمِ ٱللَّٰهِ الرَّحْمَٰنِ الرَّحِيمِ',

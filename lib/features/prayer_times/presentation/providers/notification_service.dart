@@ -1,129 +1,45 @@
-import 'dart:ui';
-
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
+import 'package:prayer_lock/features/prayer_times/data/services/native_alarm_service.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/adhan_type.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_settings.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_times.dart';
 import 'package:prayer_lock/features/prayer_times/domain/repositories/notification_repository.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SharedPreferences keys — written by the main isolate so the background alarm
-// callback can reconstruct the correct notification without a Riverpod ref.
-// ─────────────────────────────────────────────────────────────────────────────
-const String _kAdhanTypeIndex = 'prayer_adhan_type_index';
-const String _kMinutesBefore = 'prayer_notify_minutes_before';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notification channel IDs
-// Each channel carries a different sound; Android caches them independently.
+//
+// These IDs must match the constants in PrayerAlarmReceiver.kt.
+// Android caches channel settings independently — never reuse an ID with
+// different sound/importance settings once it has been delivered to a device.
 // ─────────────────────────────────────────────────────────────────────────────
 const String _kAdhanChannelId = 'prayer_adhan';
 const String _kFajrAdhanChannelId = 'prayer_fajr_adhan';
 const String _kSilentChannelId = 'prayer_silent';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Top-level alarm callback — runs in a background Dart isolate.
-//
-// Requirements:
-//   • Must be a top-level (non-closure) function.
-//   • Must be annotated @pragma('vm:entry-point').
-//   • android_alarm_manager_plus v3+ auto-registers plugins, so
-//     FlutterLocalNotificationsPlugin and SharedPreferences both work here.
-//
-// Audio files (place in android/app/src/main/res/raw/):
-//   adhan.mp3       — standard adhan for Dhuhr, Asr, Maghrib, Isha
-//   adhan_fajr.mp3  — Fajr adhan (includes "As-salatu khayrun min an-nawm")
+// adhan_type encoding for the native layer
 // ─────────────────────────────────────────────────────────────────────────────
-@pragma('vm:entry-point')
-Future<void> prayerAlarmCallback(int id) async {
-  WidgetsFlutterBinding.ensureInitialized();
-  DartPluginRegistrant.ensureInitialized();
-
-  try {
-    final prayerName = PrayerName.values[id];
-
-    final prefs = await SharedPreferences.getInstance();
-    final adhanIndex = prefs.getInt(_kAdhanTypeIndex) ?? 0;
-    final minutesBefore = prefs.getInt(_kMinutesBefore) ?? 0;
-
-    final adhanType =
-        adhanIndex < AdhanType.values.length
-            ? AdhanType.values[adhanIndex]
-            : AdhanType.standard;
-
-    // Pick channel based on adhan type and prayer name.
-    final String channelId;
-    final String channelName;
-    final AndroidNotificationSound? sound;
-
-    if (adhanType == AdhanType.silent) {
-      channelId = _kSilentChannelId;
-      channelName = 'Prayer Time Reminder';
-      sound = null;
-    } else if (prayerName == PrayerName.fajr) {
-      channelId = _kFajrAdhanChannelId;
-      channelName = 'Fajr Prayer Adhan';
-      sound = const RawResourceAndroidNotificationSound('adhan_fajr');
-    } else {
-      channelId = _kAdhanChannelId;
-      channelName = 'Prayer Time Adhan';
-      sound = const RawResourceAndroidNotificationSound('adhan');
-    }
-
-    final String title;
-    final String body;
-    if (minutesBefore > 0) {
-      title = '$minutesBefore min until ${prayerName.displayName}';
-      body = '${prayerName.arabicName}  •  Prepare for prayer';
-    } else {
-      title = '${prayerName.displayName} — Prayer Time';
-      body = '${prayerName.arabicName}  •  Time to pray';
-    }
-
-    final notifications = FlutterLocalNotificationsPlugin();
-    await notifications.initialize(
-      const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      ),
-    );
-
-    await notifications.show(
-      id,
-      title,
-      body,
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          channelId,
-          channelName,
-          importance: Importance.max,
-          priority: Priority.max,
-          sound: sound,
-          playSound: adhanType != AdhanType.silent,
-          enableVibration: true,
-          visibility: NotificationVisibility.public,
-          ticker: '${prayerName.displayName} prayer time',
-        ),
-      ),
-    );
-
-    AppLogger.info('Prayer notification shown → ${prayerName.displayName}');
-  } catch (e, st) {
-    AppLogger.error('prayerAlarmCallback error (id=$id)', e, st);
-  }
-}
+const int _kAdhanTypeStandard = 0;
+const int _kAdhanTypeFajr = 1;
+const int _kAdhanTypeSilent = 2;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NotificationService
+//
+// Concrete [NotificationRepository] implementation.
+//
+// Architecture change (v2):
+//   Previous: android_alarm_manager_plus → AlarmService (background Dart isolate)
+//             → FlutterLocalNotificationsPlugin.show()
+//   Now:      PrayerAlarmChannel (MethodChannel) → AlarmManager.setExactAndAllowWhileIdle()
+//             → PrayerAlarmReceiver (native BroadcastReceiver) → NotificationManagerCompat
+//
+// The native path survives battery-optimization killing that breaks the old
+// Dart-isolate path on Xiaomi MIUI, Infinix HiOS, OPPO ColorOS, etc.
 // ─────────────────────────────────────────────────────────────────────────────
-
-/// Concrete [NotificationRepository] implementation.
-/// Lives in the presentation layer so it can freely use platform plugins.
 class NotificationService implements NotificationRepository {
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -141,9 +57,8 @@ class NotificationService implements NotificationRepository {
       );
       await _notifications.initialize(initSettings);
       await _createNotificationChannels();
-      await AndroidAlarmManager.initialize();
       _initialised = true;
-      AppLogger.info('NotificationService initialised');
+      AppLogger.info('NotificationService initialised (native-alarm mode)');
       return true;
     } catch (e, st) {
       AppLogger.error('NotificationService.initialize failed', e, st);
@@ -156,12 +71,10 @@ class NotificationService implements NotificationRepository {
   @override
   Future<bool> requestPermissions() async {
     try {
-      // POST_NOTIFICATIONS — Android 13+ (API 33+)
       final notifStatus = await Permission.notification.request();
       final granted = notifStatus.isGranted || notifStatus.isLimited;
       AppLogger.info('POST_NOTIFICATIONS: $notifStatus');
 
-      // Warn if exact-alarm permission is missing (Android 12+)
       if (!await hasExactAlarmPermission()) {
         AppLogger.warning(
           'SCHEDULE_EXACT_ALARM not granted — alarms may be inexact',
@@ -199,6 +112,11 @@ class NotificationService implements NotificationRepository {
 
   // ── scheduling ───────────────────────────────────────────────────────────────
 
+  /// Schedules all enabled prayer alarms for [prayerTimes] using native
+  /// [AlarmManager.setExactAndAllowWhileIdle].
+  ///
+  /// Each prayer is scheduled as an individual exact alarm whose [PendingIntent]
+  /// targets [PrayerAlarmReceiver].  Alarms already in the past are skipped.
   @override
   Future<void> scheduleAllPrayers({
     required PrayerTimes prayerTimes,
@@ -206,14 +124,11 @@ class NotificationService implements NotificationRepository {
   }) async {
     if (!_initialised) await initialize();
 
-    // Persist settings so the background-isolate callback can read them.
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kAdhanTypeIndex, settings.adhanType.index);
-    await prefs.setInt(_kMinutesBefore, settings.notificationMinutesBefore);
-
+    // Cancel all existing alarms first to avoid duplicates when settings change.
     await cancelAllPrayers();
 
     final now = DateTime.now();
+
     for (final prayer in prayerTimes.allPrayers) {
       if (!(settings.notificationsEnabled[prayer.name] ?? true)) {
         AppLogger.debug('${prayer.name.displayName} notifications disabled');
@@ -225,43 +140,53 @@ class NotificationService implements NotificationRepository {
       );
 
       if (!alarmTime.isAfter(now)) {
-        AppLogger.debug('${prayer.name.displayName} alarm time already passed');
+        AppLogger.debug(
+          '${prayer.name.displayName} alarm time already passed — skipping',
+        );
         continue;
       }
 
-      await AndroidAlarmManager.oneShotAt(
-        alarmTime,
-        prayer.name.index, // Unique ID 0–4
-        prayerAlarmCallback,
-        exact: true,
-        wakeup: true,
-        rescheduleOnReboot: true,
-        alarmClock: true, // Bypasses Doze mode; shows in Android clock app
-      );
+      final int adhanType = _resolveAdhanType(settings.adhanType, prayer.name);
 
-      AppLogger.info(
-        'Scheduled ${prayer.name.displayName} → ${alarmTime.toIso8601String()}',
+      await NativeAlarmService.scheduleExactPrayerAlarm(
+        id: prayer.name.index,
+        timeMs: alarmTime.millisecondsSinceEpoch,
+        prayerName: prayer.name.displayName,
+        arabicName: prayer.name.arabicName,
+        adhanType: adhanType,
+        minutesBefore: settings.notificationMinutesBefore,
       );
     }
+
+    AppLogger.info('scheduleAllPrayers complete');
   }
 
   // ── cancel ───────────────────────────────────────────────────────────────────
 
   @override
   Future<void> cancelAllPrayers() async {
-    for (final prayer in PrayerName.values) {
-      await AndroidAlarmManager.cancel(prayer.index);
-    }
-    AppLogger.info('All prayer alarms cancelled');
+    await NativeAlarmService.cancelAllPrayerAlarms();
   }
 
   // ── private ──────────────────────────────────────────────────────────────────
 
+  /// Maps [AdhanType] + [PrayerName] to the integer encoding expected by the
+  /// native [PrayerAlarmReceiver]:
+  ///   0 — standard adhan (adhan.mp3)
+  ///   1 — Fajr adhan     (adhan_fajr.mp3)
+  ///   2 — silent
+  int _resolveAdhanType(AdhanType adhanType, PrayerName prayer) {
+    if (adhanType == AdhanType.silent) return _kAdhanTypeSilent;
+    if (prayer == PrayerName.fajr) return _kAdhanTypeFajr;
+    return _kAdhanTypeStandard;
+  }
+
   /// Creates the three Android 8+ notification channels.
-  /// Safe to call multiple times — Android no-ops if the channel already exists.
   ///
-  /// IMPORTANT: place audio files in android/app/src/main/res/raw/
-  ///   adhan.mp3       — standard adhan
+  /// IMPORTANT: Channel properties (sound, importance) are immutable after
+  /// first creation.  To change them you must delete and recreate under a new ID.
+  /// Audio files must exist in android/app/src/main/res/raw/:
+  ///   adhan.mp3       — standard adhan (Dhuhr / Asr / Maghrib / Isha)
   ///   adhan_fajr.mp3  — Fajr adhan
   Future<void> _createNotificationChannels() async {
     final plugin =
@@ -271,7 +196,6 @@ class NotificationService implements NotificationRepository {
             >();
     if (plugin == null) return;
 
-    // Standard adhan channel
     await plugin.createNotificationChannel(
       const AndroidNotificationChannel(
         _kAdhanChannelId,
@@ -286,7 +210,6 @@ class NotificationService implements NotificationRepository {
       ),
     );
 
-    // Fajr adhan channel (Salat ul Fajr adhan)
     await plugin.createNotificationChannel(
       const AndroidNotificationChannel(
         _kFajrAdhanChannelId,
@@ -301,7 +224,6 @@ class NotificationService implements NotificationRepository {
       ),
     );
 
-    // Silent / vibration-only channel
     await plugin.createNotificationChannel(
       const AndroidNotificationChannel(
         _kSilentChannelId,
@@ -314,6 +236,6 @@ class NotificationService implements NotificationRepository {
       ),
     );
 
-    AppLogger.info('Notification channels ready');
+    AppLogger.info('Notification channels created/verified');
   }
 }

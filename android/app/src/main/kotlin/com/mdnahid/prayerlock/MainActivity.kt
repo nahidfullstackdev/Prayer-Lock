@@ -10,5 +10,9 @@ class MainActivity : FlutterFragmentActivity() {
             context = applicationContext,
             binaryMessenger = flutterEngine.dartExecutor.binaryMessenger,
         ).register()
+        PrayerAlarmChannel(
+            context = applicationContext,
+            binaryMessenger = flutterEngine.dartExecutor.binaryMessenger,
+        ).register()
     }
 }

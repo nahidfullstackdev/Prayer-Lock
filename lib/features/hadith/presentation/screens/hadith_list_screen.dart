@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:prayer_lock/core/constants/api_constants.dart';
 import 'package:prayer_lock/features/hadith/domain/entities/hadith_collection.dart';
 import 'package:prayer_lock/features/hadith/domain/entities/hadith_language.dart';
 import 'package:prayer_lock/features/hadith/presentation/providers/hadith_providers.dart';
 import 'package:prayer_lock/features/hadith/presentation/widgets/hadith_card.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
 
 /// Displays hadiths for a single collection with search, language filter,
 /// and infinite scroll (Pro).
@@ -43,6 +45,8 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
   }
 
   void _onScroll() {
+    // Free users are capped at the first page — no infinite scroll.
+    if (!ref.read(isProProvider)) return;
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 300) {
       ref
@@ -54,12 +58,20 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isPro = ref.watch(isProProvider);
     final state = ref.watch(hadithListProvider(widget.collection.name));
     final selectedLanguages = ref.watch(hadithSelectedLanguagesProvider);
+    final isPro = ref.watch(isProProvider);
 
-    final displayList =
+    final rawList =
         state.isInSearchMode ? state.searchResults : state.hadiths;
+    // Free tier: cap visible hadiths at hadithFreePageSize. Search results
+    // stay unfiltered so users can discover what's behind Pro before paying.
+    final displayList = (!isPro && !state.isInSearchMode)
+        ? rawList.take(ApiConstants.hadithFreePageSize).toList()
+        : rawList;
+    final showFreeCap = !isPro &&
+        !state.isInSearchMode &&
+        rawList.length >= ApiConstants.hadithFreePageSize;
 
     // Available languages for this collection (filter to known ones)
     final availableLangs = widget.collection.availableLanguages.isNotEmpty
@@ -186,33 +198,6 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
             ),
           ),
 
-          // ── Free tier notice ─────────────────────────────────────────────
-          if (!isPro && !state.isInSearchMode && state.hadiths.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 14,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Showing first ${state.hadiths.length} hadiths — upgrade for full access',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
           // ── Loading state ────────────────────────────────────────────────
           if (state.isLoading)
             const SliverFillRemaining(
@@ -260,15 +245,8 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
               ),
             ),
 
-            // Pro locked card shown after free-tier hadiths
-            if (!isPro && !state.isInSearchMode && displayList.isNotEmpty)
-              const SliverPadding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
-                sliver: SliverToBoxAdapter(child: HadithProLockedCard()),
-              ),
-
-            // Load more indicator (Pro)
-            if (state.isLoadingMore)
+            // Load more indicator (Pro only — free users are capped)
+            if (state.isLoadingMore && isPro)
               const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
@@ -276,7 +254,25 @@ class _HadithListScreenState extends ConsumerState<HadithListScreen> {
                 ),
               ),
 
-            // End-of-list (Pro)
+            // Free-tier paywall CTA — replaces pagination after the cap
+            if (showFreeCap)
+              SliverToBoxAdapter(
+                child: _FreeCapCta(
+                  collectionTitle: widget.collection.title,
+                  totalHadith: widget.collection.totalHadith,
+                  freeLimit: ApiConstants.hadithFreePageSize,
+                  onUnlock: () => showProPaywall(
+                    context,
+                    ref.read(subscriptionRepositoryProvider),
+                    placement: 'hadith_locked',
+                    featureTitle: 'Hadith Collections',
+                    featureDescription:
+                        'Unlock the full ${widget.collection.title} and every other collection.',
+                  ),
+                ),
+              ),
+
+            // End-of-list (Pro only)
             if (isPro && !state.hasMore && displayList.isNotEmpty)
               SliverToBoxAdapter(
                 child: Padding(
@@ -372,6 +368,104 @@ class _LanguageFilterRow extends StatelessWidget {
                 ),
               );
             }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Free-tier paywall CTA ────────────────────────────────────────────────────
+
+class _FreeCapCta extends StatelessWidget {
+  const _FreeCapCta({
+    required this.collectionTitle,
+    required this.totalHadith,
+    required this.freeLimit,
+    required this.onUnlock,
+  });
+
+  final String collectionTitle;
+  final int totalHadith;
+  final int freeLimit;
+  final VoidCallback onUnlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gold = cs.secondary;
+    final remaining = totalHadith - freeLimit;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainer,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: gold.withValues(alpha: 0.45)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  colors: [
+                    gold.withValues(alpha: 0.28),
+                    gold.withValues(alpha: 0.05),
+                  ],
+                ),
+                shape: BoxShape.circle,
+                border: Border.all(color: gold.withValues(alpha: 0.5)),
+              ),
+              child: Icon(Icons.workspace_premium_rounded, color: gold, size: 28),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'You\'ve read the free preview',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+                color: cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '$remaining more hadiths in $collectionTitle are reserved for Pro members.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: FilledButton(
+                onPressed: onUnlock,
+                style: FilledButton.styleFrom(
+                  backgroundColor: gold,
+                  foregroundColor:
+                      isDark ? const Color(0xFF1A1A00) : Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'Unlock all Hadith collections',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/features/hadith/domain/entities/hadith_collection.dart';
 import 'package:prayer_lock/features/hadith/presentation/providers/hadith_providers.dart';
 import 'package:prayer_lock/features/hadith/presentation/screens/hadith_list_screen.dart';
-import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
-import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
 
 /// Hadith home screen: shows all supported collections and navigates into each.
 class HadithScreen extends ConsumerStatefulWidget {
@@ -26,7 +24,6 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isPro = ref.watch(isProProvider);
     final state = ref.watch(hadithCollectionsProvider);
 
     // Fallback static collections used while loading / on error
@@ -137,22 +134,9 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
               itemCount: collections.length,
               itemBuilder: (context, index) {
                 final c = collections[index];
-                // Free: first 2 collections unlocked; rest require Pro
-                final bool locked = !isPro && index >= 2;
                 return _CollectionCard(
                   collection: c,
-                  locked: locked,
-                  onTap: locked
-                      ? () => showProPaywall(
-                            context,
-                            ref.read(subscriptionRepositoryProvider),
-                            placement: 'hadith_locked',
-                            featureTitle: 'Hadith Collections',
-                            featureDescription:
-                                'Browse all 10 authenticated collections — '
-                                'Tirmidhi, Abu Dawud, Nasai, Ibn Majah, and more.',
-                          )
-                      : () => _openCollection(context, c),
+                  onTap: () => _openCollection(context, c),
                 );
               },
             ),
@@ -252,12 +236,10 @@ class _HadithScreenState extends ConsumerState<HadithScreen> {
 class _CollectionCard extends StatelessWidget {
   const _CollectionCard({
     required this.collection,
-    required this.locked,
     required this.onTap,
   });
 
   final HadithCollection collection;
-  final bool locked;
   final VoidCallback onTap;
 
   @override
@@ -283,16 +265,12 @@ class _CollectionCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: locked
-                      ? cs.outlineVariant.withValues(alpha: 0.3)
-                      : cs.secondary.withValues(alpha: 0.12),
+                  color: cs.secondary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
-                  locked
-                      ? Icons.lock_rounded
-                      : Icons.auto_stories_rounded,
-                  color: locked ? cs.outlineVariant : cs.secondary,
+                  Icons.auto_stories_rounded,
+                  color: cs.secondary,
                   size: 24,
                 ),
               ),
@@ -308,9 +286,7 @@ class _CollectionCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
-                        color: locked
-                            ? cs.onSurface.withValues(alpha: 0.5)
-                            : cs.onSurface,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -332,9 +308,7 @@ class _CollectionCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: locked
-                      ? cs.onSurfaceVariant.withValues(alpha: 0.5)
-                      : cs.onSurfaceVariant,
+                  color: cs.onSurfaceVariant,
                 ),
               ),
               const SizedBox(width: 10),

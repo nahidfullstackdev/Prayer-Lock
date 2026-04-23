@@ -83,7 +83,7 @@ class RevenueCatService implements SubscriptionRepository {
   Stream<AppSubscriptionStatus> get statusStream => _statusController.stream;
 
   /// Fetches the current RevenueCat offering and purchases the package that
-  /// matches [planId] (`'monthly'` or `'lifetime'`). Falls back to the first
+  /// matches [planId] (`'weekly'` or `'annual'`). Falls back to the first
   /// available package if no exact match is found. Resolves silently on user
   /// cancellation; rethrows on billing / network errors.
   @override
@@ -98,7 +98,7 @@ class RevenueCatService implements SubscriptionRepository {
       }
 
       Package? package =
-          planId == 'lifetime' ? current.lifetime : current.monthly;
+          planId == 'annual' ? current.annual : current.weekly;
       package ??= current.availablePackages.firstOrNull;
 
       if (package == null) {

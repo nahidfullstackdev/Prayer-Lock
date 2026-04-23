@@ -73,7 +73,7 @@ class ProPaywallSheet extends ConsumerStatefulWidget {
   final String? featureDescription;
 
   /// Called when the user taps the primary CTA (after auth gate passes).
-  /// Receives `'monthly'` or `'lifetime'` based on the selected plan card.
+  /// Receives `'weekly'` or `'annual'` based on the selected plan card.
   /// The sheet closes after this Future completes.
   final Future<void> Function(String planId) onUpgradeTap;
 
@@ -86,10 +86,10 @@ class ProPaywallSheet extends ConsumerStatefulWidget {
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-enum _Plan { monthly, lifetime }
+enum _Plan { weekly, yearly }
 
 class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
-  _Plan _selectedPlan = _Plan.lifetime;
+  _Plan _selectedPlan = _Plan.yearly;
   bool _isLoading = false;
 
   @override
@@ -331,21 +331,21 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
             children: [
               Expanded(
                 child: _PlanCard(
-                  plan: _Plan.monthly,
-                  selected: _selectedPlan == _Plan.monthly,
+                  plan: _Plan.weekly,
+                  selected: _selectedPlan == _Plan.weekly,
                   cs: cs,
                   isDark: isDark,
-                  onTap: () => setState(() => _selectedPlan = _Plan.monthly),
+                  onTap: () => setState(() => _selectedPlan = _Plan.weekly),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _PlanCard(
-                  plan: _Plan.lifetime,
-                  selected: _selectedPlan == _Plan.lifetime,
+                  plan: _Plan.yearly,
+                  selected: _selectedPlan == _Plan.yearly,
                   cs: cs,
                   isDark: isDark,
-                  onTap: () => setState(() => _selectedPlan = _Plan.lifetime),
+                  onTap: () => setState(() => _selectedPlan = _Plan.yearly),
                 ),
               ),
             ],
@@ -449,7 +449,7 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
     setState(() => _isLoading = true);
     try {
       final planId =
-          _selectedPlan == _Plan.lifetime ? 'lifetime' : 'monthly';
+          _selectedPlan == _Plan.yearly ? 'annual' : 'weekly';
       await widget.onUpgradeTap(planId);
       // RevenueCat flow has completed (purchase or dismiss).
       if (mounted) Navigator.pop(context);
@@ -476,10 +476,11 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
 
   String _billingNote() {
     // TODO: swap with RevenueCat product priceStrings when configured.
-    final price =
-        _selectedPlan == _Plan.lifetime ? r'$39.99 once' : r'$2.99/month';
     final store = _isAndroid() ? 'Google Play' : 'App Store';
-    return 'Cancel anytime · $price · Billed via $store';
+    if (_selectedPlan == _Plan.yearly) {
+      return '3-day free trial, then \$14.99/year · Cancel anytime · Billed via $store';
+    }
+    return 'Billed at \$0.99/week · Cancel anytime · Billed via $store';
   }
 
   bool _isAndroid() {
@@ -573,7 +574,7 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLifetime = plan == _Plan.lifetime;
+    final isYearly = plan == _Plan.yearly;
     final gold = cs.secondary;
 
     return GestureDetector(
@@ -598,7 +599,7 @@ class _PlanCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isLifetime ? 'Lifetime' : 'Monthly',
+                  isYearly ? 'Yearly' : 'Weekly',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -608,7 +609,7 @@ class _PlanCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isLifetime ? r'$39.99' : r'$2.99',
+                  isYearly ? r'$14.99' : r'$0.99',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
@@ -617,30 +618,29 @@ class _PlanCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  isLifetime ? 'one-time' : 'per month',
+                  isYearly ? 'per year' : 'per week',
                   style: TextStyle(
                     fontSize: 11,
                     color: cs.onSurfaceVariant,
                   ),
                 ),
-                if (isLifetime) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'No monthly fee',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: cs.primary,
-                    ),
+                const SizedBox(height: 6),
+                Text(
+                  isYearly
+                      ? r'Only $1.25/m after free trial'
+                      : r'Billed at $0.99',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isYearly ? cs.primary : cs.onSurfaceVariant,
                   ),
-                ] else
-                  const SizedBox(height: 18),
+                ),
               ],
             ),
           ),
 
-          // ONE TIME PAYMENT badge on lifetime card
-          if (isLifetime)
+          // 3-DAY FREE TRIAL badge on yearly card
+          if (isYearly)
             Positioned(
               top: -11,
               right: 10,
@@ -651,7 +651,7 @@ class _PlanCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'ONE TIME',
+                  '3-DAY FREE TRIAL',
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w800,

@@ -10,7 +10,6 @@ import 'package:prayer_lock/features/hadith/domain/usecases/get_hadiths.dart';
 import 'package:prayer_lock/features/hadith/domain/usecases/search_hadiths.dart';
 import 'package:prayer_lock/features/hadith/presentation/providers/hadith_collections_notifier.dart';
 import 'package:prayer_lock/features/hadith/presentation/providers/hadith_list_notifier.dart';
-import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 
 export 'package:prayer_lock/features/hadith/presentation/providers/hadith_language_preferences_provider.dart';
 
@@ -84,7 +83,6 @@ final hadithListProvider = StateNotifierProvider.family<
     HadithListNotifier, HadithListState, String>(
   (ref, collection) => HadithListNotifier(
     collection: collection,
-    isPro: ref.read(isProProvider),
     ref: ref,
     getHadithsUseCase: ref.read(getHadithsUseCaseProvider),
     searchHadithsUseCase: ref.read(searchHadithsUseCaseProvider),

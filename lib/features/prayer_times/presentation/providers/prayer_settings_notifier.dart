@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
+import 'package:prayer_lock/features/prayer_times/domain/entities/adhan_type.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_settings.dart';
 import 'package:prayer_lock/features/prayer_times/domain/usecases/get_prayer_settings.dart';
@@ -94,8 +95,17 @@ class PrayerSettingsNotifier extends StateNotifier<PrayerSettingsState> {
     await _saveSettings(updated);
   }
 
-  /// Save settings to local storage
+  /// Update adhan sound type
+  Future<void> updateAdhanType(AdhanType type) async {
+    final updated = state.settings.copyWith(adhanType: type);
+    await _saveSettings(updated);
+  }
+
+  /// Save settings to local storage (optimistic update — UI reacts immediately).
   Future<void> _saveSettings(PrayerSettings settings) async {
+    // Apply immediately so callers can read the new value right away.
+    state = state.copyWith(settings: settings, errorMessage: null);
+
     final result = await updatePrayerSettingsUseCase(settings);
 
     result.fold(
@@ -103,10 +113,7 @@ class PrayerSettingsNotifier extends StateNotifier<PrayerSettingsState> {
         AppLogger.error('Failed to save settings: ${failure.message}');
         state = state.copyWith(errorMessage: failure.message);
       },
-      (_) {
-        AppLogger.info('Settings saved: $settings');
-        state = state.copyWith(settings: settings, errorMessage: null);
-      },
+      (_) => AppLogger.info('Settings saved: $settings'),
     );
   }
 }

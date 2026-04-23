@@ -14,7 +14,7 @@ abstract class SubscriptionRepository {
 
   /// Initiates a direct purchase for the given [planId].
   ///
-  /// [planId] must be `'monthly'` or `'lifetime'` — mapped to the matching
+  /// [planId] must be `'weekly'` or `'annual'` — mapped to the matching
   /// RevenueCat [PackageType] in the current offering. Resolves silently if
   /// the user cancels. Throws on network / billing errors so the caller can
   /// surface them.

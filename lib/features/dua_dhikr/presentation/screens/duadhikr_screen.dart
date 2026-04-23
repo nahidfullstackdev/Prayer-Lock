@@ -27,9 +27,9 @@ class _DuaDhikrScreenState extends ConsumerState<DuaDhikrScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isPro = ref.watch(isProProvider);
     final catState = ref.watch(duaCategoriesProvider);
     final tasbih = ref.watch(tasbihProvider);
+    final isPro = ref.watch(isProProvider);
 
     final progress =
         tasbih.target > 0 ? (tasbih.count / tasbih.target).clamp(0.0, 1.0) : 0.0;
@@ -132,26 +132,6 @@ class _DuaDhikrScreenState extends ConsumerState<DuaDhikrScreen> {
                       color: cs.onSurface,
                     ),
                   ),
-                  const Spacer(),
-                  if (!isPro)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.secondary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Pro unlocks 5 more',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: cs.secondary,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -168,21 +148,13 @@ class _DuaDhikrScreenState extends ConsumerState<DuaDhikrScreen> {
                 final cat = catState.categories.isEmpty
                     ? _staticCategories[index]
                     : catState.categories[index];
-                final locked = !isPro && cat.isPro;
+                final locked = cat.isPro && !isPro;
                 return _CategoryCard(
                   category: cat,
                   locked: locked,
-                  onTap: locked
-                      ? () => showProPaywall(
-                            context,
-                            ref.read(subscriptionRepositoryProvider),
-                            placement: 'dua_locked',
-                            featureTitle: 'Dua Categories',
-                            featureDescription:
-                                'Unlock Travel, Health & Illness, Seeking '
-                                'Forgiveness, Anxiety & Worry, and more.',
-                          )
-                      : () => _openCategory(context, cat),
+                  onTap: () => locked
+                      ? _openPaywall(context, ref, cat)
+                      : _openCategory(context, cat),
                 );
               },
             ),
@@ -201,6 +173,15 @@ class _DuaDhikrScreenState extends ConsumerState<DuaDhikrScreen> {
     );
   }
 
+  void _openPaywall(BuildContext context, WidgetRef ref, DuaCategory cat) {
+    showProPaywall(
+      context,
+      ref.read(subscriptionRepositoryProvider),
+      placement: 'dua_locked',
+      featureTitle: 'Dua & Dhikr',
+      featureDescription: 'Unlock "${cat.name}" and all Pro dua categories.',
+    );
+  }
 }
 
 // ─── Tasbih counter widget ────────────────────────────────────────────────────
@@ -387,17 +368,18 @@ class _TasbihCounter extends ConsumerWidget {
 class _CategoryCard extends StatelessWidget {
   const _CategoryCard({
     required this.category,
-    required this.locked,
     required this.onTap,
+    this.locked = false,
   });
 
   final DuaCategory category;
-  final bool locked;
   final VoidCallback onTap;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final icon = _iconFor(category.iconName);
 
     return Container(
@@ -418,14 +400,14 @@ class _CategoryCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: locked
-                      ? cs.outlineVariant.withValues(alpha: 0.25)
-                      : cs.tertiary.withValues(alpha: 0.12),
+                  color: cs.tertiary.withValues(alpha: locked ? 0.08 : 0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   locked ? Icons.lock_rounded : icon,
-                  color: locked ? cs.outlineVariant : cs.tertiary,
+                  color: locked
+                      ? cs.onSurfaceVariant
+                      : cs.tertiary,
                   size: 22,
                 ),
               ),
@@ -439,9 +421,7 @@ class _CategoryCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: locked
-                            ? cs.onSurface.withValues(alpha: 0.45)
-                            : cs.onSurface,
+                        color: locked ? cs.onSurfaceVariant : cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -450,15 +430,31 @@ class _CategoryCard extends StatelessWidget {
                       textDirection: TextDirection.rtl,
                       style: TextStyle(
                         fontSize: 12,
-                        color: locked
-                            ? cs.onSurfaceVariant.withValues(alpha: 0.5)
-                            : cs.onSurfaceVariant,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (!locked)
+              if (locked)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: cs.secondary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'PRO',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? const Color(0xFF1A1A00) : Colors.white,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                )
+              else
                 Text(
                   '${category.duaCount} duas',
                   style: TextStyle(
@@ -469,9 +465,7 @@ class _CategoryCard extends StatelessWidget {
                 ),
               const SizedBox(width: 8),
               Icon(
-                locked
-                    ? Icons.lock_outline_rounded
-                    : Icons.arrow_forward_ios_rounded,
+                Icons.arrow_forward_ios_rounded,
                 size: 14,
                 color: cs.outlineVariant,
               ),

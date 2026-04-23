@@ -154,9 +154,13 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
 
     final nextPrayer = getNextPrayerUseCase(prayerTimes);
     final now = DateTime.now();
-    final remaining = nextPrayer.time.isAfter(now)
-        ? nextPrayer.time.difference(now)
-        : Duration.zero;
+    // After Isha, getNextPrayerUseCase returns today's Fajr (already past);
+    // roll over to tomorrow so the countdown keeps ticking instead of
+    // clamping to zero.
+    final targetTime = nextPrayer.time.isAfter(now)
+        ? nextPrayer.time
+        : nextPrayer.time.add(const Duration(days: 1));
+    final remaining = targetTime.difference(now);
 
     state = state.copyWith(
       nextPrayer: nextPrayer,

@@ -8,11 +8,17 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:prayer_lock/core/theme/theme_provider.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/providers/app_blocker_providers.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
+import 'package:prayer_lock/features/calendar/presentation/screens/islamic_calendar_screen.dart';
+import 'package:prayer_lock/features/calendar/presentation/screens/ramadan_tracker_screen.dart';
 import 'package:prayer_lock/features/dua_dhikr/presentation/screens/duadhikr_screen.dart';
 import 'package:prayer_lock/features/hadith/presentation/screens/hadith_screen.dart';
 import 'package:prayer_lock/features/home/presentation/screens/home_screen.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/prayer_times_providers.dart';
+import 'package:prayer_lock/features/prayer_times/presentation/widgets/notification_settings_sheet.dart';
+import 'package:prayer_lock/features/prayer_times/presentation/widgets/qibla_compass_sheet.dart';
 import 'package:prayer_lock/features/quran/presentation/screens/quran_home_screen.dart';
+import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
+import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
 import 'package:prayer_lock/main.dart';
 
 // Keep in sync with version in pubspec.yaml
@@ -44,7 +50,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrapPermissions());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _bootstrapPermissions(),
+    );
   }
 
   @override
@@ -69,10 +77,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
     if (!mounted) return;
 
     // Standard permissions: system handles duplicates; no-op if already granted.
-    await [
-      Permission.notification,
-      Permission.locationWhenInUse,
-    ].request();
+    await [Permission.notification, Permission.locationWhenInUse].request();
 
     // Special Android permissions require the user to visit a Settings page.
     if (Platform.isAndroid && mounted) {
@@ -83,10 +88,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
   Future<void> _checkAndMaybeShowSpecialPermsSheet() async {
     if (!mounted) return;
     final repo = ref.read(appBlockerRepositoryProvider);
-    final hasUsage =
-        (await repo.hasUsageStatsPermission()).fold((_) => false, (v) => v);
-    final hasOverlay =
-        (await repo.hasOverlayPermission()).fold((_) => false, (v) => v);
+    final hasUsage = (await repo.hasUsageStatsPermission()).fold(
+      (_) => false,
+      (v) => v,
+    );
+    final hasOverlay = (await repo.hasOverlayPermission()).fold(
+      (_) => false,
+      (v) => v,
+    );
     if (hasUsage && hasOverlay) return;
     if (!mounted) return;
 
@@ -94,20 +103,21 @@ class _MainScreenState extends ConsumerState<MainScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => _SpecialPermissionsSheet(
-        hasUsageStats: hasUsage,
-        hasOverlay: hasOverlay,
-        onGrantUsage: () {
-          _openedSpecialSettings = true;
-          Navigator.pop(sheetCtx);
-          repo.openUsageStatsSettings();
-        },
-        onGrantOverlay: () {
-          _openedSpecialSettings = true;
-          Navigator.pop(sheetCtx);
-          repo.openOverlaySettings();
-        },
-      ),
+      builder:
+          (sheetCtx) => _SpecialPermissionsSheet(
+            hasUsageStats: hasUsage,
+            hasOverlay: hasOverlay,
+            onGrantUsage: () {
+              _openedSpecialSettings = true;
+              Navigator.pop(sheetCtx);
+              repo.openUsageStatsSettings();
+            },
+            onGrantOverlay: () {
+              _openedSpecialSettings = true;
+              Navigator.pop(sheetCtx);
+              repo.openOverlaySettings();
+            },
+          ),
     );
   }
 
@@ -194,6 +204,15 @@ class MoreScreen extends ConsumerWidget {
     (22, 'Comunidade Islamica de Lisboa'),
     (23, 'Ministry of Awqaf, Jordan'),
   ];
+
+  void _showAboutSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _AboutSheet(),
+    );
+  }
 
   void _showMethodPicker(BuildContext context, WidgetRef ref, int current) {
     final cs = Theme.of(context).colorScheme;
@@ -386,21 +405,33 @@ class MoreScreen extends ConsumerWidget {
                       icon: Icons.calendar_month_rounded,
                       color: cs.primary,
                       title: 'Islamic Calendar',
-                      onTap: () {},
+                      onTap:
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const IslamicCalendarScreen(),
+                            ),
+                          ),
                     ),
                     Divider(height: 1, indent: 68, color: cs.outlineVariant),
                     _MoreRow(
                       icon: Icons.explore_rounded,
                       color: cs.tertiary,
                       title: 'Qibla Compass',
-                      onTap: () {},
+                      onTap: () => showQiblaSheet(context),
                     ),
                     Divider(height: 1, indent: 68, color: cs.outlineVariant),
                     _MoreRow(
                       icon: Icons.mosque_rounded,
                       color: const Color(0xFF7C3AED),
                       title: 'Ramadan Tracker',
-                      onTap: () {},
+                      onTap:
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => const RamadanTrackerScreen(),
+                            ),
+                          ),
                     ),
                     if (Platform.isAndroid) ...[
                       Divider(height: 1, indent: 68, color: cs.outlineVariant),
@@ -408,13 +439,28 @@ class MoreScreen extends ConsumerWidget {
                         icon: Icons.lock_outline_rounded,
                         color: cs.primary,
                         title: 'App Blocker',
-                        onTap:
-                            () => Navigator.push(
+                        trailing: ref.watch(isProProvider)
+                            ? null
+                            : const _ProBadge(),
+                        onTap: () {
+                          if (ref.read(isProProvider)) {
+                            Navigator.push(
                               context,
                               MaterialPageRoute<void>(
                                 builder: (_) => const AppBlockerScreen(),
                               ),
-                            ),
+                            );
+                          } else {
+                            showProPaywall(
+                              context,
+                              ref.read(subscriptionRepositoryProvider),
+                              placement: 'app_blocker_locked',
+                              featureTitle: 'App Blocker',
+                              featureDescription:
+                                  'Block distracting apps during every Salah window.',
+                            );
+                          }
+                        },
                       ),
                     ],
                   ],
@@ -558,14 +604,14 @@ class MoreScreen extends ConsumerWidget {
                       icon: Icons.notifications_outlined,
                       color: const Color(0xFFF59E0B),
                       title: 'Notifications',
-                      onTap: () {},
+                      onTap: () => showNotificationSettings(context),
                     ),
                     Divider(height: 1, indent: 68, color: cs.outlineVariant),
                     _MoreRow(
                       icon: Icons.info_outline_rounded,
                       color: cs.onSurfaceVariant,
                       title: 'About',
-                      onTap: () {},
+                      onTap: () => _showAboutSheet(context),
                     ),
                   ],
                 ),
@@ -598,11 +644,13 @@ class _MoreRow extends StatelessWidget {
     required this.color,
     required this.title,
     required this.onTap,
+    this.trailing,
   });
   final IconData icon;
   final Color color;
   final String title;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -634,12 +682,44 @@ class _MoreRow extends StatelessWidget {
                 ),
               ),
             ),
+            if (trailing != null) ...[
+              trailing!,
+              const SizedBox(width: 8),
+            ],
             Icon(
               Icons.arrow_forward_ios_rounded,
               size: 14,
               color: cs.outlineVariant,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── PRO badge ───────────────────────────────────────────────────────────────
+
+class _ProBadge extends StatelessWidget {
+  const _ProBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: cs.secondary,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        'PRO',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          color: isDark ? const Color(0xFF1A1A00) : Colors.white,
+          letterSpacing: 1.0,
         ),
       ),
     );
@@ -750,9 +830,10 @@ class _SpecialPermissionsSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? cs.surfaceContainer.withValues(alpha: 0.55)
-                      : cs.surfaceContainer,
+                  color:
+                      isDark
+                          ? cs.surfaceContainer.withValues(alpha: 0.55)
+                          : cs.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: cs.outlineVariant),
                 ),
@@ -794,10 +875,7 @@ class _SpecialPermissionsSheet extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
               child: Text(
                 'Skip for now',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: cs.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
               ),
             ),
             const SizedBox(height: 12),
@@ -876,6 +954,218 @@ class _PermRow extends StatelessWidget {
             child: const Text(
               'Grant',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── About Sheet ─────────────────────────────────────────────────────────────
+
+class _AboutSheet extends StatelessWidget {
+  const _AboutSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = isDark ? const Color(0xFF0F1E2D) : cs.surface;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [cs.primary, cs.tertiary],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.mosque_rounded, color: cs.onPrimary, size: 36),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Prayer Lock',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: cs.onSurface,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Build Discipline, Pray on Time',
+              style: TextStyle(
+                fontSize: 13,
+                color: cs.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Version $_kAppVersion',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: cs.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Text(
+                'Built for modern Muslims who struggle with focus in a digital world — combining essential daily tools with behavior-driven features to guide you toward maintaining Salah on time.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color:
+                      isDark
+                          ? cs.surfaceContainer.withValues(alpha: 0.55)
+                          : cs.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant),
+                ),
+                child: Column(
+                  children: [
+                    const _AboutInfoRow(
+                      icon: Icons.menu_book_rounded,
+                      label: 'Quran text',
+                      value: 'Al-Quran Cloud API',
+                    ),
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    const _AboutInfoRow(
+                      icon: Icons.access_time_rounded,
+                      label: 'Prayer times',
+                      value: 'Aladhan API',
+                    ),
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    const _AboutInfoRow(
+                      icon: Icons.code_rounded,
+                      label: 'Developer',
+                      value: 'MdNahid.com',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Text(
+                '© ${DateTime.now().year} Prayer Lock · All rights reserved',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutInfoRow extends StatelessWidget {
+  const _AboutInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: cs.primary, size: 16),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
             ),
           ),
         ],

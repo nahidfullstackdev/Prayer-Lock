@@ -60,13 +60,10 @@ class HadithListState {
 // ─── Notifier ─────────────────────────────────────────────────────────────────
 
 /// Manages paginated hadith list for one collection.
-///
-/// [isPro] controls whether infinite scroll is enabled.
 /// Automatically reloads when the user's selected languages change.
 class HadithListNotifier extends StateNotifier<HadithListState> {
   HadithListNotifier({
     required this.collection,
-    required this.isPro,
     required this.ref,
     required this.getHadithsUseCase,
     required this.searchHadithsUseCase,
@@ -83,13 +80,11 @@ class HadithListNotifier extends StateNotifier<HadithListState> {
   }
 
   final String collection;
-  final bool isPro;
   final Ref ref;
   final GetHadithsUseCase getHadithsUseCase;
   final SearchHadithsUseCase searchHadithsUseCase;
 
-  int get _pageSize =>
-      isPro ? ApiConstants.hadithProPageSize : ApiConstants.hadithFreePageSize;
+  int get _pageSize => ApiConstants.hadithProPageSize;
 
   List<String> get _selectedLanguages =>
       ref.read(hadithSelectedLanguagesProvider);
@@ -135,16 +130,14 @@ class HadithListNotifier extends StateNotifier<HadithListState> {
           hadiths: hadiths,
           isLoading: false,
           currentPage: 1,
-          // Free users only get the first page
-          hasMore: isPro && hadiths.length >= _pageSize,
+          hasMore: hadiths.length >= _pageSize,
         );
       },
     );
   }
 
-  /// Load the next page (Pro only). No-op for free users.
   Future<void> loadNextPage() async {
-    if (!isPro || !state.hasMore || state.isLoadingMore || state.isLoading) {
+    if (!state.hasMore || state.isLoadingMore || state.isLoading) {
       return;
     }
 

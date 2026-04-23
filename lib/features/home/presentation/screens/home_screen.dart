@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:prayer_lock/core/widgets/adhan_test_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer.dart';
@@ -108,7 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   _buildHadithOfTheDay(context),
                   const SizedBox(height: 20),
                   // ── DEBUG: remove this block when done testing ──────────
-                  const AdhanTestWidget(),
+                  // const AdhanTestWidget(),
                   // ────────────────────────────────────────────────────────
                   const SizedBox(height: 32),
                 ],
@@ -412,28 +411,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           children: [
             Expanded(
               child: _buildFeatureCard(
-                gradientColors: isDark
-                    ? [const Color(0xFF052E16), const Color(0xFF14532D)]
-                    : [const Color(0xFF15803D), const Color(0xFF166534)],
+                gradientColors:
+                    isDark
+                        ? [const Color(0xFF052E16), const Color(0xFF14532D)]
+                        : [const Color(0xFF15803D), const Color(0xFF166534)],
                 borderColor: cs.primary.withValues(alpha: 0.35),
                 icon: Icons.shield_rounded,
                 bgIcon: Icons.shield_outlined,
                 title: 'App Blocker',
                 subtitle: 'Block distracting\napps during prayer',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) => const AppBlockerScreen(),
-                  ),
-                ),
+                onTap:
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AppBlockerScreen(),
+                      ),
+                    ),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: _buildFeatureCard(
-                gradientColors: isDark
-                    ? [const Color(0xFF042F2E), const Color(0xFF134E4A)]
-                    : [const Color(0xFF0F766E), const Color(0xFF0D9488)],
+                gradientColors:
+                    isDark
+                        ? [const Color(0xFF042F2E), const Color(0xFF134E4A)]
+                        : [const Color(0xFF0F766E), const Color(0xFF0D9488)],
                 borderColor: cs.tertiary.withValues(alpha: 0.35),
                 icon: Icons.explore_rounded,
                 bgIcon: Icons.explore_outlined,
@@ -447,42 +449,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         const SizedBox(height: 16),
         // ── Quick Nav ─────────────────────────────────────────────────────
         Row(
-          children: quickItems
-              .map(
-                (item) => Expanded(
-                  child: GestureDetector(
-                    onTap: () =>
-                        ref.read(selectedTabProvider.notifier).state =
-                            item.tabIndex,
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 54,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            color: item.color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: item.color.withValues(alpha: 0.15),
+          children:
+              quickItems
+                  .map(
+                    (item) => Expanded(
+                      child: GestureDetector(
+                        onTap:
+                            () =>
+                                ref.read(selectedTabProvider.notifier).state =
+                                    item.tabIndex,
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 54,
+                              height: 54,
+                              decoration: BoxDecoration(
+                                color: item.color.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: item.color.withValues(alpha: 0.15),
+                                ),
+                              ),
+                              child: Icon(
+                                item.icon,
+                                color: item.color,
+                                size: 26,
+                              ),
                             ),
-                          ),
-                          child: Icon(item.icon, color: item.color, size: 26),
+                            const SizedBox(height: 8),
+                            Text(
+                              item.label,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              )
-              .toList(),
+                  )
+                  .toList(),
         ),
       ],
     );

@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- POST_NOTIFICATIONS required on Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Required to open ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS directly -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- ── App Blocker Permissions ──────────────────────────────────────────── -->
     <!-- Usage stats — must be granted manually by user in Special App Access -->
@@ -108,6 +110,33 @@
             android:exported="false" />
         <receiver
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ── Native prayer alarm system ────────────────────────────────────
+             PrayerAlarmReceiver: fired directly by AlarmManager — no Flutter
+             Dart isolate involved, so it is immune to OEM battery-optimisation
+             killing (Xiaomi MIUI, Infinix HiOS, OPPO ColorOS, etc.).
+             exported="false": AlarmManager's PendingIntent is an explicit
+             broadcast (Intent(context, PrayerAlarmReceiver::class)) so the
+             receiver does not need to be exported.                           -->
+        <receiver
+            android:name=".PrayerAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- PrayerBootReceiver: reschedules prayer alarms after reboot.
+             Listens for BOOT_COMPLETED, QUICKBOOT_POWERON, and
+             MY_PACKAGE_REPLACED (covers OTA app updates).                   -->
+        <receiver
+            android:name=".PrayerBootReceiver"
             android:enabled="true"
             android:exported="false">
             <intent-filter>
