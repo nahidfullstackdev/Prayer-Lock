@@ -24,7 +24,7 @@ class RevenueCatService implements SubscriptionRepository {
   RevenueCatService._internal();
 
   // ── API keys — replace with your RevenueCat dashboard keys ────────────────
-  static const String _iosApiKey = 'test_YnSLhYtBinlzKfezdNwXLkeBlWl';
+  static const String _iosApiKey = 'sk_SeusETklaIOKHHrDBkYaBWHcFZBFG';
   static const String _androidApiKey = 'sk_dgTUqWhEMCMQfKWpZGNCVZfEXQhEF';
 
   /// Must match the entitlement identifier in RevenueCat dashboard.
@@ -87,15 +87,17 @@ class RevenueCatService implements SubscriptionRepository {
     final entitlement = customerInfo.entitlements.active[_entitlementId];
     final isActive = entitlement != null;
 
-    _currentStatus = isActive
-        ? AppSubscriptionStatus.active
-        : AppSubscriptionStatus.inactive;
+    _currentStatus =
+        isActive
+            ? AppSubscriptionStatus.active
+            : AppSubscriptionStatus.inactive;
 
     _currentInfo = SubscriptionInfo(
       status: _currentStatus,
-      plan: isActive
-          ? _planFor(entitlement.productIdentifier)
-          : SubscriptionPlan.none,
+      plan:
+          isActive
+              ? _planFor(entitlement.productIdentifier)
+              : SubscriptionPlan.none,
       productIdentifier: entitlement?.productIdentifier,
       expirationDate: _parseDate(entitlement?.expirationDate),
       willRenew: entitlement?.willRenew,

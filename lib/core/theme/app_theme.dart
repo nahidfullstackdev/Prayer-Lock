@@ -69,7 +69,7 @@ abstract final class AppTheme {
         foregroundColor: _dTextPrimary,
         surfaceTintColor: Colors.transparent,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: _dCard,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -200,7 +200,7 @@ abstract final class AppTheme {
         foregroundColor: _lTextPrimary,
         surfaceTintColor: Colors.transparent,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: _lCard,
         elevation: 0,
         shape: RoundedRectangleBorder(
