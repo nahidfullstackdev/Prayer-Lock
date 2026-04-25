@@ -11,7 +11,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 ///
 /// ── Singleton ─────────────────────────────────────────────────────────────
 /// A singleton so the same listener registered in [configure] keeps
-/// [statusStream] live for the lifetime of the app.
+/// [statusStream] / [infoStream] live for the lifetime of the app.
 ///
 /// ── Setup checklist ───────────────────────────────────────────────────────
 /// 1. Replace [_iosApiKey] / [_androidApiKey] with your RevenueCat API keys.
@@ -25,7 +25,7 @@ class RevenueCatService implements SubscriptionRepository {
 
   // ── API keys — replace with your RevenueCat dashboard keys ────────────────
   static const String _iosApiKey = 'test_YnSLhYtBinlzKfezdNwXLkeBlWl';
-  static const String _androidApiKey = 'test_YnSLhYtBinlzKfezdNwXLkeBlWl';
+  static const String _androidApiKey = 'sk_dgTUqWhEMCMQfKWpZGNCVZfEXQhEF';
 
   /// Must match the entitlement identifier in RevenueCat dashboard.
   static const String _entitlementId = 'pro';
@@ -33,8 +33,17 @@ class RevenueCatService implements SubscriptionRepository {
   // ── Internal state ─────────────────────────────────────────────────────────
   final StreamController<AppSubscriptionStatus> _statusController =
       StreamController<AppSubscriptionStatus>.broadcast();
+  final StreamController<SubscriptionInfo> _infoController =
+      StreamController<SubscriptionInfo>.broadcast();
 
   AppSubscriptionStatus _currentStatus = AppSubscriptionStatus.unknown;
+  SubscriptionInfo _currentInfo = SubscriptionInfo.unknown;
+
+  /// Cached store-product identifiers for the weekly / annual packages,
+  /// captured from the current offering during [configure]. Used to map an
+  /// active entitlement's `productIdentifier` to a [SubscriptionPlan].
+  String? _weeklyProductId;
+  String? _annualProductId;
 
   // ── Static initialiser ─────────────────────────────────────────────────────
 
@@ -45,6 +54,10 @@ class RevenueCatService implements SubscriptionRepository {
 
     // Keep status in sync for the lifetime of the app.
     Purchases.addCustomerInfoUpdateListener(_instance._onCustomerInfoUpdate);
+
+    // Cache offering product ids before the first status emission so that
+    // plan detection is accurate from the start.
+    await _instance._cacheOfferingProductIds();
 
     // Seed initial status immediately.
     try {
@@ -59,16 +72,69 @@ class RevenueCatService implements SubscriptionRepository {
     );
   }
 
+  Future<void> _cacheOfferingProductIds() async {
+    try {
+      final offerings = await Purchases.getOfferings();
+      final current = offerings.current;
+      _weeklyProductId = current?.weekly?.storeProduct.identifier;
+      _annualProductId = current?.annual?.storeProduct.identifier;
+    } catch (e) {
+      AppLogger.warning('RevenueCat getOfferings failed: $e');
+    }
+  }
+
   void _onCustomerInfoUpdate(CustomerInfo customerInfo) {
-    final isActive = customerInfo.entitlements.active.containsKey(
-      _entitlementId,
+    final entitlement = customerInfo.entitlements.active[_entitlementId];
+    final isActive = entitlement != null;
+
+    _currentStatus = isActive
+        ? AppSubscriptionStatus.active
+        : AppSubscriptionStatus.inactive;
+
+    _currentInfo = SubscriptionInfo(
+      status: _currentStatus,
+      plan: isActive
+          ? _planFor(entitlement.productIdentifier)
+          : SubscriptionPlan.none,
+      productIdentifier: entitlement?.productIdentifier,
+      expirationDate: _parseDate(entitlement?.expirationDate),
+      willRenew: entitlement?.willRenew,
+      isInTrial: entitlement?.periodType == PeriodType.trial,
     );
-    _currentStatus =
-        isActive
-            ? AppSubscriptionStatus.active
-            : AppSubscriptionStatus.inactive;
+
     _statusController.add(_currentStatus);
-    AppLogger.info('Subscription status → ${_currentStatus.name}');
+    _infoController.add(_currentInfo);
+
+    AppLogger.info(
+      'Subscription status → ${_currentStatus.name} '
+      '(plan: ${_currentInfo.plan.label}, productId: ${_currentInfo.productIdentifier ?? "—"})',
+    );
+  }
+
+  /// Maps a store product identifier to a [SubscriptionPlan].
+  ///
+  /// First compares against the cached weekly / annual product ids from the
+  /// current RevenueCat offering. Falls back to a substring heuristic so a
+  /// plan label is still produced when offerings could not be loaded (e.g.
+  /// offline at boot but a cached entitlement is restored).
+  SubscriptionPlan _planFor(String productIdentifier) {
+    if (_weeklyProductId != null && productIdentifier == _weeklyProductId) {
+      return SubscriptionPlan.weekly;
+    }
+    if (_annualProductId != null && productIdentifier == _annualProductId) {
+      return SubscriptionPlan.annual;
+    }
+    final lower = productIdentifier.toLowerCase();
+    if (lower.contains('week')) return SubscriptionPlan.weekly;
+    if (lower.contains('annual') || lower.contains('year')) {
+      return SubscriptionPlan.annual;
+    }
+    return SubscriptionPlan.none;
+  }
+
+  DateTime? _parseDate(String? iso) {
+    if (iso == null) return null;
+    return DateTime.tryParse(iso);
   }
 
   // ── SubscriptionRepository ─────────────────────────────────────────────────
@@ -77,10 +143,16 @@ class RevenueCatService implements SubscriptionRepository {
   AppSubscriptionStatus get currentStatus => _currentStatus;
 
   @override
+  SubscriptionInfo get currentInfo => _currentInfo;
+
+  @override
   bool get isPro => _currentStatus.isPro;
 
   @override
   Stream<AppSubscriptionStatus> get statusStream => _statusController.stream;
+
+  @override
+  Stream<SubscriptionInfo> get infoStream => _infoController.stream;
 
   /// Fetches the current RevenueCat offering and purchases the package that
   /// matches [planId] (`'weekly'` or `'annual'`). Falls back to the first
@@ -97,8 +169,12 @@ class RevenueCatService implements SubscriptionRepository {
         return;
       }
 
-      Package? package =
-          planId == 'annual' ? current.annual : current.weekly;
+      // Refresh cached product ids opportunistically — the offering may have
+      // changed since boot.
+      _weeklyProductId = current.weekly?.storeProduct.identifier;
+      _annualProductId = current.annual?.storeProduct.identifier;
+
+      Package? package = planId == 'annual' ? current.annual : current.weekly;
       package ??= current.availablePackages.firstOrNull;
 
       if (package == null) {
@@ -127,5 +203,6 @@ class RevenueCatService implements SubscriptionRepository {
   @override
   void dispose() {
     _statusController.close();
+    _infoController.close();
   }
 }

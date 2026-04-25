@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/auth/domain/entities/auth_user.dart';
 import 'package:prayer_lock/features/auth/domain/repositories/auth_repository.dart';
+import 'package:prayer_lock/features/subscription/domain/entities/subscription_status.dart';
 
 /// Firebase-backed [AuthRepository].
 ///
@@ -92,6 +93,38 @@ class FirebaseAuthService implements AuthRepository {
   Future<void> signOut() async {
     AppLogger.info('FirebaseAuth: signing out');
     await Future.wait([_google.signOut(), _auth.signOut()]);
+  }
+
+  // ── Subscription record ────────────────────────────────────────────────────
+
+  @override
+  Future<void> updateSubscriptionRecord({
+    required String uid,
+    required SubscriptionInfo info,
+  }) async {
+    if (uid.isEmpty) return;
+    try {
+      await _db.collection('users').doc(uid).set(
+        <String, dynamic>{
+          'subscriptionStatus': info.status.name,
+          'subscriptionPlan': info.plan.label,
+          'subscriptionProductId': info.productIdentifier,
+          'subscriptionExpiresAt': info.expirationDate == null
+              ? null
+              : Timestamp.fromDate(info.expirationDate!),
+          'subscriptionWillRenew': info.willRenew,
+          'subscriptionInTrial': info.isInTrial,
+          'subscriptionUpdatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      AppLogger.info(
+        'Firestore: subscription synced for $uid → '
+        '${info.status.name}/${info.plan.label}',
+      );
+    } catch (e, st) {
+      AppLogger.error('Firestore subscription sync failed', e, st);
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

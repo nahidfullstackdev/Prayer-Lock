@@ -53,6 +53,8 @@ dependencies:
   # Notifications & Alarms
   flutter_local_notifications: ^18.0.1
   android_alarm_manager_plus: ^4.0.5
+  timezone: ^0.9.4
+  flutter_timezone: ^3.0.1
 
   # Media
   audioplayers: ^6.1.0
@@ -84,6 +86,9 @@ dependencies:
   flutter_svg: ^2.0.16
   cached_network_image: ^3.4.1
 
+  # Home Screen Widget
+  home_widget: ^0.7.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -96,24 +101,17 @@ dev_dependencies:
   hive_generator: ^2.0.1
   riverpod_generator: ^2.6.2
 
-  # App icon generation — run with: dart run flutter_launcher_icons
-  flutter_launcher_icons: ^0.14.1
-
   # Testing
   mockito: ^5.4.4
 
 # ─── App launcher icons ─────────────────────────────────────────────────────
-# Regenerate after changing the source image:
-#   dart run flutter_launcher_icons
-flutter_launcher_icons:
-  android: "ic_launcher"
-  ios: true
-  image_path: "assets/images/logo/prayer-lock-icon.png"
-  min_sdk_android: 26
-  remove_alpha_ios: true
-  background_color_ios: "#E8E2CF"
-  adaptive_icon_background: "#E8E2CF"
-  adaptive_icon_foreground: "assets/images/logo/prayer-lock-icon.png"
+# Pre-sized launcher icons are committed directly into:
+#   android/app/src/main/res/mipmap-*/ic_launcher.png
+#   android/app/src/main/res/drawable-*/ic_launcher_foreground.png
+#   ios/Runner/Assets.xcassets/AppIcon.appiconset/
+# Sources live in assets/android/ (dark) and assets/ios/ — copy them over if
+# the artwork changes. In-app logo variants live in assets/android/ (dark)
+# and assets/light/ and are picked by theme in BrandLogo.
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -131,7 +129,9 @@ flutter:
     - assets/images/
     - assets/images/icons/
     - assets/images/backgrounds/
-    - assets/images/logo/
+    - assets/android/
+    - assets/ios/
+    - assets/light/
     - assets/audio/adhan/
     - assets/databases/
     - assets/data/

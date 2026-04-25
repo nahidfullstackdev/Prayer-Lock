@@ -13,6 +13,7 @@ import 'package:prayer_lock/features/calendar/presentation/screens/ramadan_track
 import 'package:prayer_lock/features/dua_dhikr/presentation/screens/duadhikr_screen.dart';
 import 'package:prayer_lock/features/hadith/presentation/screens/hadith_screen.dart';
 import 'package:prayer_lock/features/home/presentation/screens/home_screen.dart';
+import 'package:prayer_lock/features/home_widget/data/services/home_widget_service.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/prayer_times_providers.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/widgets/notification_settings_sheet.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/widgets/qibla_compass_sheet.dart';
@@ -211,6 +212,38 @@ class MoreScreen extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const _AboutSheet(),
+    );
+  }
+
+  /// Tries to pin the Prayer Lock widget to the launcher. Falls back to
+  /// an instructional sheet when the launcher doesn't support programmatic
+  /// pinning (common on older Android launchers and always on iOS).
+  Future<void> _addHomeWidget(BuildContext context) async {
+    if (!Platform.isAndroid) {
+      _showAddWidgetSheet(context, manual: true);
+      return;
+    }
+
+    final supported = await HomeWidgetService.isPinWidgetSupported();
+    if (!context.mounted) return;
+
+    if (!supported) {
+      _showAddWidgetSheet(context, manual: true);
+      return;
+    }
+
+    // The plugin does not report whether the launcher prompt was accepted,
+    // so we just fire-and-forget. If the launcher dialog is dismissed, the
+    // user can still long-press the home screen and add it manually.
+    await HomeWidgetService.requestPinWidget();
+  }
+
+  void _showAddWidgetSheet(BuildContext context, {required bool manual}) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddWidgetSheet(manual: manual),
     );
   }
 
@@ -432,6 +465,13 @@ class MoreScreen extends ConsumerWidget {
                               builder: (_) => const RamadanTrackerScreen(),
                             ),
                           ),
+                    ),
+                    Divider(height: 1, indent: 68, color: cs.outlineVariant),
+                    _MoreRow(
+                      icon: Icons.widgets_rounded,
+                      color: const Color(0xFF0EA5E9),
+                      title: 'Home Screen Widget',
+                      onTap: () => _addHomeWidget(context),
                     ),
                     if (Platform.isAndroid) ...[
                       Divider(height: 1, indent: 68, color: cs.outlineVariant),
@@ -958,6 +998,199 @@ class _PermRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Add Home Widget Sheet ───────────────────────────────────────────────────
+//
+// Shown either when the launcher refuses programmatic pinning
+// (requestPinAppWidget returned false / unsupported) or on iOS where
+// WidgetKit must be pinned by the user from the widget gallery.
+
+class _AddWidgetSheet extends StatelessWidget {
+  const _AddWidgetSheet({required this.manual});
+
+  final bool manual;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = isDark ? const Color(0xFF0F1E2D) : cs.surface;
+    final isIos = Platform.isIOS;
+
+    final steps = isIos
+        ? const [
+            'Long-press any empty spot on your Home Screen.',
+            'Tap the ＋ button in the top-left corner.',
+            'Search for "Prayer Lock" and pick a size.',
+            'Tap Add Widget, then Done.',
+          ]
+        : const [
+            'Long-press any empty spot on your home screen.',
+            'Tap "Widgets".',
+            'Find "Prayer Lock" in the list.',
+            'Drag "Next Prayer" onto your home screen.',
+          ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.widgets_rounded,
+                      color: Color(0xFF0EA5E9),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add the Prayer Lock widget',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'See the next prayer and countdown at a glance.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              if (manual)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainer,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: cs.outlineVariant),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < steps.length; i++) ...[
+                        _WidgetStepRow(index: i + 1, text: steps[i]),
+                        if (i < steps.length - 1) const SizedBox(height: 10),
+                      ],
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: cs.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Got it',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WidgetStepRow extends StatelessWidget {
+  const _WidgetStepRow({required this.index, required this.text});
+
+  final int index;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: cs.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '$index',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: cs.primary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

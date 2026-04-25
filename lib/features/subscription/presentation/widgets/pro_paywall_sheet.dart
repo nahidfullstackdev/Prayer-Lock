@@ -64,6 +64,11 @@ class ProPaywallSheet extends ConsumerStatefulWidget {
     this.featureDescription,
     required this.onUpgradeTap,
     required this.onRestoreTap,
+    this.embedded = false,
+    this.onPurchaseSuccess,
+    this.onRestoreSuccess,
+    this.onSkip,
+    this.onDebugSkip,
   });
 
   /// e.g. `'App Blocker'` → header reads "Unlock App Blocker and more"
@@ -74,11 +79,33 @@ class ProPaywallSheet extends ConsumerStatefulWidget {
 
   /// Called when the user taps the primary CTA (after auth gate passes).
   /// Receives `'weekly'` or `'annual'` based on the selected plan card.
-  /// The sheet closes after this Future completes.
+  /// When [embedded] is false, the sheet closes after this Future completes.
   final Future<void> Function(String planId) onUpgradeTap;
 
   /// Called when the user taps "Restore Purchases".
   final Future<void> Function() onRestoreTap;
+
+  /// When true, the widget renders without the bottom-sheet handle and does
+  /// not pop the navigation route after a purchase / restore. Use this when
+  /// embedding the paywall as a full page (e.g. onboarding) instead of a
+  /// modal sheet.
+  final bool embedded;
+
+  /// Invoked after [onUpgradeTap] resolves, only when [embedded] is true.
+  /// Caller decides what to do (e.g. check entitlement and navigate forward).
+  final VoidCallback? onPurchaseSuccess;
+
+  /// Invoked after [onRestoreTap] resolves, only when [embedded] is true.
+  final VoidCallback? onRestoreSuccess;
+
+  /// Optional user-facing "Skip for now" button shown below the footer in
+  /// embedded mode (e.g. onboarding). When null, nothing is rendered — the
+  /// paywall stays mandatory. Separate from [onDebugSkip] so the two can
+  /// coexist without conflicting copy.
+  final VoidCallback? onSkip;
+
+  /// Optional debug-only escape hatch shown below the footer in embedded mode.
+  final VoidCallback? onDebugSkip;
 
   @override
   ConsumerState<ProPaywallSheet> createState() => _ProPaywallSheetState();
@@ -101,7 +128,9 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
     return Container(
       decoration: BoxDecoration(
         color: sheetBg,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: widget.embedded
+            ? BorderRadius.zero
+            : const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
@@ -109,7 +138,8 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildHandle(cs),
+              if (!widget.embedded) _buildHandle(cs),
+              if (widget.embedded) const SizedBox(height: 8),
               _buildHeader(cs, isDark),
               const SizedBox(height: 24),
               _buildFeatures(cs, isDark),
@@ -119,6 +149,43 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
               _buildCTA(cs, isDark),
               const SizedBox(height: 14),
               _buildFooter(cs),
+              if (widget.embedded && widget.onSkip != null) ...[
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: widget.onSkip,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                  child: Text(
+                    'Skip for now',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                      decorationColor: cs.onSurfaceVariant.withValues(
+                        alpha: 0.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (widget.embedded && widget.onDebugSkip != null) ...[
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: widget.onDebugSkip,
+                  child: Text(
+                    '[DEBUG] Skip paywall',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.55),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
             ],
           ),
@@ -452,7 +519,12 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
           _selectedPlan == _Plan.yearly ? 'annual' : 'weekly';
       await widget.onUpgradeTap(planId);
       // RevenueCat flow has completed (purchase or dismiss).
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      if (widget.embedded) {
+        widget.onPurchaseSuccess?.call();
+      } else {
+        Navigator.pop(context);
+      }
     } catch (_) {
       // Purchase errors are logged inside RevenueCatService.
     } finally {
@@ -464,7 +536,12 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
     setState(() => _isLoading = true);
     try {
       await widget.onRestoreTap();
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      if (widget.embedded) {
+        widget.onRestoreSuccess?.call();
+      } else {
+        Navigator.pop(context);
+      }
     } catch (_) {
       // Logged in service layer.
     } finally {

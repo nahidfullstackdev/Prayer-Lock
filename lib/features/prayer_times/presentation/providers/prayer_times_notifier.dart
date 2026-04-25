@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/location_data.dart';
+import 'package:prayer_lock/features/home_widget/data/services/home_widget_service.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_settings.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_times.dart';
@@ -53,6 +54,11 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
   final GetNextPrayerUseCase getNextPrayerUseCase;
   final NotificationRepository notificationRepository;
   Timer? _countdownTimer;
+
+  /// Home-screen widget pushes are throttled to once per minute to avoid
+  /// hitting Android's AppWidget update throttling on devices where the
+  /// launcher enforces it.
+  DateTime? _lastWidgetPushAt;
 
   PrayerTimesNotifier({
     required this.getPrayerTimesUseCase,
@@ -165,6 +171,23 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
     state = state.copyWith(
       nextPrayer: nextPrayer,
       timeRemaining: remaining,
+    );
+
+    _maybePushWidget(nextPrayer, remaining, now);
+  }
+
+  /// Push next-prayer data to the home screen widget, throttled so the
+  /// widget updates at most once per minute (the countdown ticks in seconds
+  /// but the widget only shows "Xh Ym").
+  void _maybePushWidget(Prayer nextPrayer, Duration remaining, DateTime now) {
+    final last = _lastWidgetPushAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 60)) {
+      return;
+    }
+    _lastWidgetPushAt = now;
+    HomeWidgetService.updateNextPrayer(
+      prayer: nextPrayer,
+      countdown: remaining,
     );
   }
 

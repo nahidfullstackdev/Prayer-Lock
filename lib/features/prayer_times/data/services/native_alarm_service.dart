@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 
@@ -40,6 +42,7 @@ class NativeAlarmService {
     required int adhanType,
     required int minutesBefore,
   }) async {
+    if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>('scheduleExactPrayerAlarm', {
         'id': id,
@@ -64,6 +67,7 @@ class NativeAlarmService {
 
   /// Cancel a single prayer alarm by its [id] (0-4).
   static Future<void> cancelPrayerAlarm(int id) async {
+    if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>('cancelPrayerAlarm', {'id': id});
       AppLogger.info('[NativeAlarm] Cancelled alarm id=$id');
@@ -74,6 +78,7 @@ class NativeAlarmService {
 
   /// Cancel all 5 daily prayer alarms.
   static Future<void> cancelAllPrayerAlarms() async {
+    if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>('cancelAllPrayerAlarms');
       AppLogger.info('[NativeAlarm] All prayer alarms cancelled');
@@ -87,6 +92,7 @@ class NativeAlarmService {
   /// Returns true if the system is NOT applying battery optimisation to this app.
   /// Always returns true on Android < 6.0 (Doze mode didn't exist yet).
   static Future<bool> isBatteryOptimizationIgnored() async {
+    if (!Platform.isAndroid) return true;
     try {
       return await _channel.invokeMethod<bool>('isBatteryOptimizationIgnored') ??
           false;
@@ -106,6 +112,7 @@ class NativeAlarmService {
   /// Requires the [REQUEST_IGNORE_BATTERY_OPTIMIZATIONS] permission in the
   /// manifest (already declared).
   static Future<void> openBatteryOptimizationSettings() async {
+    if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>('openBatteryOptimizationSettings');
     } on PlatformException catch (e, st) {
@@ -126,6 +133,7 @@ class NativeAlarmService {
   static Future<void> openAutoStartSettings({
     String manufacturer = '',
   }) async {
+    if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod<void>('openAutoStartSettings', {
         'manufacturer': manufacturer.toLowerCase(),

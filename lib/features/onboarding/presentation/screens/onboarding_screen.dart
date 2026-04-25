@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:prayer_lock/core/theme/app_theme.dart';
+import 'package:prayer_lock/core/widgets/brand_logo.dart';
 import 'package:prayer_lock/features/onboarding/presentation/providers/onboarding_provider.dart';
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
@@ -29,8 +30,6 @@ const int _kPaywall = 17;
 // Maps page index → question number (only question-flow pages).
 int? _questionNo(int page) =>
     const {2: 1, 3: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7}[page];
-
-enum _Plan { monthly, lifetime }
 
 // ─── OnboardingScreen ─────────────────────────────────────────────────────────
 
@@ -63,11 +62,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // ── Processing ────────────────────────────────────────────────────────────────
   double _processingProgress = 0;
   Timer? _processingTimer;
-
-  // ── Paywall ───────────────────────────────────────────────────────────────────
-  _Plan _selectedPlan = _Plan.lifetime;
-  bool _paywallLoading = false;
-  String? _paywallError;
 
   @override
   void initState() {
@@ -145,41 +139,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   // ─── Purchase ─────────────────────────────────────────────────────────────────
 
-  Future<void> _handlePurchase() async {
-    final repo = ref.read(subscriptionRepositoryProvider);
-    setState(() {
-      _paywallLoading = true;
-      _paywallError = null;
-    });
-    try {
-      await showProPaywall(context, repo, placement: 'onboarding_paywall');
-      if (!mounted) return;
-      if (ref.read(isProProvider)) await _finish();
-    } catch (_) {
-      if (mounted) setState(() => _paywallError = 'Purchase failed. Please try again.');
-    } finally {
-      if (mounted) setState(() => _paywallLoading = false);
-    }
-  }
-
-  Future<void> _handleRestore() async {
-    final repo = ref.read(subscriptionRepositoryProvider);
-    setState(() {
-      _paywallLoading = true;
-      _paywallError = null;
-    });
-    try {
-      await repo.restorePurchases();
-      if (!mounted) return;
-      if (ref.read(isProProvider)) {
-        await _finish();
-      } else {
-        if (mounted) setState(() => _paywallError = 'No active subscription found.');
-      }
-    } catch (_) {
-      if (mounted) setState(() => _paywallError = 'Restore failed. Please try again.');
-    } finally {
-      if (mounted) setState(() => _paywallLoading = false);
+  void _onPaywallSuccess() {
+    if (!mounted) return;
+    if (ref.read(isProProvider)) {
+      _finish();
     }
   }
 
@@ -392,15 +355,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _FeaturesPage(onNext: _next),
       // 16 — App blocker permission
       _AppBlockerPage(onNext: _next, onSkip: _next),
-      // 17 — Paywall (mandatory)
-      _PaywallPage(
-        selectedPlan: _selectedPlan,
-        onPlanSelect: (p) => setState(() => _selectedPlan = p),
-        isLoading: _paywallLoading,
-        errorMessage: _paywallError,
-        onPurchase: _handlePurchase,
-        onRestore: _handleRestore,
-        onDebugSkip: kDebugMode ? _finish : null,
+      // 17 — Paywall
+      Builder(
+        builder: (_) {
+          final repo = ref.read(subscriptionRepositoryProvider);
+          return ProPaywallSheet(
+            embedded: true,
+            onUpgradeTap: repo.purchase,
+            onRestoreTap: repo.restorePurchases,
+            onPurchaseSuccess: _onPaywallSuccess,
+            onRestoreSuccess: _onPaywallSuccess,
+            onSkip: _finish,
+            onDebugSkip: kDebugMode ? _finish : null,
+          );
+        },
       ),
     ];
   }
@@ -688,12 +656,7 @@ class _GlowLogo extends StatelessWidget {
               ),
             ),
           ),
-          Image.asset(
-            'assets/images/logo/prayer-lock-icon.png',
-            width: size,
-            height: size,
-            filterQuality: FilterQuality.high,
-          ),
+          BrandLogo(size: size),
         ],
       ),
     );
@@ -2756,544 +2719,6 @@ class _AppBlockerPage extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Page 17: Paywall (Mandatory) ─────────────────────────────────────────────
-
-class _PaywallPage extends StatelessWidget {
-  const _PaywallPage({
-    required this.selectedPlan,
-    required this.onPlanSelect,
-    required this.isLoading,
-    required this.errorMessage,
-    required this.onPurchase,
-    required this.onRestore,
-    this.onDebugSkip,
-  });
-
-  final _Plan selectedPlan;
-  final ValueChanged<_Plan> onPlanSelect;
-  final bool isLoading;
-  final String? errorMessage;
-  final Future<void> Function() onPurchase;
-  final Future<void> Function() onRestore;
-  final Future<void> Function()? onDebugSkip;
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
-    final cs = Theme.of(context).colorScheme;
-    final gold = AppTheme.gold;
-
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-            child: Column(
-              children: [
-                // Gold premium icon
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        gold.withValues(alpha: 0.25),
-                        gold.withValues(alpha: 0.05),
-                      ],
-                    ),
-                    border: Border.all(
-                      color: gold.withValues(alpha: 0.4),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.workspace_premium_rounded,
-                    color: gold,
-                    size: 40,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Title
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Prayer Lock',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFFE8EDF4),
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 3,),
-                      decoration: BoxDecoration(
-                        color: gold,
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                      child: const Text(
-                        'PRO',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1A1A00),
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Complete your transformation. Unlock every tool.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF8899AD),
-                    height: 1.4,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-
-                // Features
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF152032),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFF253550)),
-                  ),
-                  child: Column(
-                    children: [
-                      _PaywallFeatureRow(
-                        icon: Icons.phonelink_erase_rounded,
-                        color: const Color(0xFFEF4444),
-                        title: 'App Blocker',
-                        subtitle: 'Block distractions during every Salah',
-                        cs: cs,
-                      ),
-                      _PaywallDivider(),
-                      _PaywallFeatureRow(
-                        icon: Icons.volunteer_activism_rounded,
-                        color: AppTheme.teal,
-                        title: 'Full Dua & Hadith',
-                        subtitle: '11+ categories · all 10 hadith collections',
-                        cs: cs,
-                      ),
-                      _PaywallDivider(),
-                      _PaywallFeatureRow(
-                        icon: Icons.widgets_rounded,
-                        color: cs.primary,
-                        title: 'Home Screen Widget',
-                        subtitle: 'Next prayer + countdown on your home screen',
-                        cs: cs,
-                      ),
-                      _PaywallDivider(),
-                      _PaywallFeatureRow(
-                        icon: Icons.do_not_disturb_on_total_silence_rounded,
-                        color: gold,
-                        title: 'Ad-Free Forever',
-                        subtitle: 'No interruptions during your worship',
-                        cs: cs,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Plan selector
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Choose your plan',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF8899AD),
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _PlanCard(
-                        plan: _Plan.monthly,
-                        selected: selectedPlan == _Plan.monthly,
-                        gold: gold,
-                        onTap: () => onPlanSelect(_Plan.monthly),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _PlanCard(
-                        plan: _Plan.lifetime,
-                        selected: selectedPlan == _Plan.lifetime,
-                        gold: gold,
-                        onTap: () => onPlanSelect(_Plan.lifetime),
-                      ),
-                    ),
-                  ],
-                ),
-
-                if (errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: const Color(0xFFEF4444).withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: Text(
-                      errorMessage!,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFFEF4444),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-
-        // Bottom CTA
-        Padding(
-          padding: EdgeInsets.fromLTRB(20, 8, 20, bottom + 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : onPurchase,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: gold,
-                    disabledBackgroundColor: gold.withValues(alpha: 0.4),
-                    foregroundColor: const Color(0xFF1A1A00),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Color(0xFF1A1A00),
-                          ),
-                        )
-                      : Text(
-                          selectedPlan == _Plan.lifetime
-                              ? 'Unlock Pro — \$39.99 Once'
-                              : 'Start Pro — \$2.99/month',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                selectedPlan == _Plan.lifetime
-                    ? 'One-time payment · No subscription · Billed via App Store / Google Play'
-                    : 'Cancel anytime · Billed monthly via App Store / Google Play',
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF5A6D85),
-                  height: 1.4,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _FooterLink(
-                    label: 'Restore Purchases',
-                    onTap: isLoading ? null : () => onRestore(),
-                  ),
-                  const _Sep(),
-                  _FooterLink(label: 'Privacy Policy', onTap: () {}),
-                  const _Sep(),
-                  _FooterLink(label: 'Terms', onTap: () {}),
-                ],
-              ),
-              if (onDebugSkip != null) ...[
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => onDebugSkip!(),
-                  child: const Text(
-                    '[DEBUG] Skip paywall',
-                    style: TextStyle(
-                      color: Color(0xFF5A6D85),
-                      fontSize: 11,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PaywallFeatureRow extends StatelessWidget {
-  const _PaywallFeatureRow({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.cs,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final ColorScheme cs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFE8EDF4),
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF8899AD),
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.check_circle_rounded,
-            color: AppTheme.emerald,
-            size: 16,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaywallDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Divider(
-      height: 1,
-      indent: 48,
-      color: const Color(0xFF253550).withValues(alpha: 0.6),
-    );
-  }
-}
-
-class _PlanCard extends StatelessWidget {
-  const _PlanCard({
-    required this.plan,
-    required this.selected,
-    required this.gold,
-    required this.onTap,
-  });
-
-  final _Plan plan;
-  final bool selected;
-  final Color gold;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isLifetime = plan == _Plan.lifetime;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-            decoration: BoxDecoration(
-              color: selected
-                  ? gold.withValues(alpha: 0.10)
-                  : const Color(0xFF152032),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: selected ? gold : const Color(0xFF253550),
-                width: selected ? 1.75 : 1.0,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isLifetime ? 'Lifetime' : 'Monthly',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? gold : const Color(0xFF8899AD),
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isLifetime ? r'$39.99' : r'$2.99',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: selected ? gold : const Color(0xFFE8EDF4),
-                    height: 1.1,
-                  ),
-                ),
-                Text(
-                  isLifetime ? 'one-time' : 'per month',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF8899AD),
-                  ),
-                ),
-                if (isLifetime) ...[
-                  const SizedBox(height: 6),
-                  const Text(
-                    'No monthly fee',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.emerald,
-                    ),
-                  ),
-                ] else
-                  const SizedBox(height: 17),
-              ],
-            ),
-          ),
-          if (isLifetime)
-            Positioned(
-              top: -10,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.emerald,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'BEST VALUE',
-                  style: TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: 0.7,
-                  ),
-                ),
-              ),
-            ),
-          if (selected)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: gold,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  size: 11,
-                  color: Color(0xFF1A1A00),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FooterLink extends StatelessWidget {
-  const _FooterLink({required this.label, required this.onTap});
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 11,
-          color: Color(0xFF8899AD),
-          decoration: TextDecoration.underline,
-          decorationColor: Color(0xFF253550),
-        ),
-      ),
-    );
-  }
-}
-
-class _Sep extends StatelessWidget {
-  const _Sep();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 6),
-      child: Text(
-        '·',
-        style: TextStyle(color: Color(0xFF253550), fontSize: 13),
       ),
     );
   }

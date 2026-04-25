@@ -5,12 +5,22 @@ abstract class SubscriptionRepository {
   /// The most recently known subscription status.
   AppSubscriptionStatus get currentStatus;
 
+  /// The most recently known full [SubscriptionInfo] (status + plan + product
+  /// id + expiry). Use this when persisting the subscription record server-side
+  /// or when the UI needs to render plan-specific copy.
+  SubscriptionInfo get currentInfo;
+
   /// Convenience shortcut — true only when the user is an active subscriber.
   bool get isPro;
 
   /// Emits the updated [AppSubscriptionStatus] whenever RevenueCat reports a
   /// customer-info change.
   Stream<AppSubscriptionStatus> get statusStream;
+
+  /// Emits the full [SubscriptionInfo] whenever RevenueCat reports a
+  /// customer-info change. Replaces [statusStream] when callers need plan
+  /// detail (e.g. to write `subscriptionPlan` to Firestore).
+  Stream<SubscriptionInfo> get infoStream;
 
   /// Initiates a direct purchase for the given [planId].
   ///

@@ -1,77 +1,55 @@
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:prayer_lock/core/utils/logger.dart';
-import 'package:prayer_lock/features/onboarding/presentation/providers/onboarding_provider.dart';
-import 'package:prayer_lock/features/onboarding/presentation/screens/onboarding_screen.dart';
-import 'package:prayer_lock/features/prayer_times/presentation/providers/notification_service.dart';
-import 'package:prayer_lock/features/subscription/data/services/revenuecat_service.dart';
-import 'package:prayer_lock/firebase_options.dart';
-import 'package:prayer_lock/main_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:prayer_lock/core/startup/app_initializer.dart';
 import 'package:prayer_lock/core/theme/app_theme.dart';
 import 'package:prayer_lock/core/theme/theme_provider.dart';
+import 'package:prayer_lock/core/utils/logger.dart';
+import 'package:prayer_lock/core/widgets/brand_logo.dart';
+import 'package:prayer_lock/features/auth/presentation/providers/auth_providers.dart';
+import 'package:prayer_lock/features/onboarding/presentation/providers/onboarding_provider.dart';
+import 'package:prayer_lock/features/onboarding/presentation/screens/onboarding_screen.dart';
+import 'package:prayer_lock/firebase_options.dart';
+import 'package:prayer_lock/main_screen.dart';
 
-import 'package:prayer_lock/features/prayer_times/data/datasources/prayer_times_local_data_source.dart';
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase must be initialised first — auth & Firestore depend on it.
-  // Replace firebase_options.dart by running: flutterfire configure
+  // Firebase is the only thing we await before runApp — Crashlytics has to
+  // install its error hooks before the first frame so nothing crashes
+  // uncaught. Everything else is handled by AppInitializer after splash.
+  await _initFirebase();
+
+  runApp(const ProviderScope(child: MuslimCompanionApp()));
+}
+
+Future<void> _initFirebase() async {
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // Crashlytics: capture all Flutter framework errors (widget build failures,
-    // layout overflows, assertion errors, etc.)
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
-
-    // Crashlytics: capture uncaught async errors that escape the root zone
-    // (e.g. unhandled Future rejections, isolate errors)
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
 
-    // Disable data collection in debug builds to keep the dashboard clean
     await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
       !kDebugMode,
     );
-  } catch (e) {
+  } catch (e, st) {
     AppLogger.error(
       'Firebase initialization failed — auth/crash reporting disabled',
       e,
+      st,
     );
   }
-
-  // Alarm manager must be initialised before runApp so that alarms scheduled
-  // during the session (and on reboot) can fire correctly.
-  await AndroidAlarmManager.initialize();
-
-  await Hive.initFlutter();
-  await Hive.openBox<dynamic>('quran_data');
-  await Hive.openBox<dynamic>('app_blocker');
-
-  // Initialize prayer times Hive boxes and adapters
-  final prayerTimesLocalDataSource = PrayerTimesLocalDataSource();
-  await prayerTimesLocalDataSource.initialize();
-
-  // Initialise notification service: creates channels only.
-  // Permission is requested later — after onboarding + Pro upgrade — via HomeScreen.
-  final notificationService = NotificationService();
-  await notificationService.initialize();
-
-  // Configure RevenueCat SDK.  The singleton listens for CustomerInfo updates
-  // and broadcasts status changes via subscriptionStatusProvider.
-  await RevenueCatService.configure();
-
-  runApp(const ProviderScope(child: MuslimCompanionApp()));
 }
 
 /// Bottom navigation tab index — shared so child screens can switch tabs
@@ -85,7 +63,11 @@ class MuslimCompanionApp extends ConsumerWidget {
     final themeMode = ref.watch(themeProvider);
     final isDark = themeMode == ThemeMode.dark;
 
-    // Sync system UI with theme
+    // Activate the auth↔subscription bridge. It only listens to streams —
+    // safe to wire up before RevenueCat has finished configuring in the
+    // deferred phase; the first real CustomerInfo emission will push through.
+    ref.read(subscriptionSyncServiceProvider);
+
     SystemChrome.setSystemUIOverlayStyle(
       isDark
           ? const SystemUiOverlayStyle(
@@ -115,17 +97,61 @@ class MuslimCompanionApp extends ConsumerWidget {
 
 // ─── App Router ──────────────────────────────────────────────────────────────
 
-/// Checks onboarding completion on first launch and routes accordingly.
-class _AppHome extends ConsumerWidget {
+/// Drives the splash-phase boot sequence:
+///   • initState kicks off the critical init (Hive / prayer datasource);
+///   • when that completes, deferred work (alarms, TZ, notifications,
+///     RevenueCat, home widget) is fired in the background without
+///     blocking first interaction;
+///   • splash is shown until the critical future resolves, then routing
+///     continues based on onboarding state.
+class _AppHome extends ConsumerStatefulWidget {
   const _AppHome();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final onboardingAsync = ref.watch(onboardingCompletedProvider);
-    return onboardingAsync.when(
-      data: (completed) => completed ? const MainScreen() : const OnboardingScreen(),
-      loading: () => const _SplashScreen(),
-      error: (_, __) => const MainScreen(),
+  ConsumerState<_AppHome> createState() => _AppHomeState();
+}
+
+class _AppHomeState extends ConsumerState<_AppHome> {
+  late final Future<void> _critical;
+
+  @override
+  void initState() {
+    super.initState();
+    _critical = _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await AppInitializer.runCritical();
+    // Deferred services run in the background — the UI is already
+    // interactive by the time these complete.
+    unawaited(AppInitializer.runDeferred());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _critical,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _SplashScreen();
+        }
+        if (snapshot.hasError) {
+          AppLogger.error(
+            'App critical init failed',
+            snapshot.error,
+            snapshot.stackTrace,
+          );
+          return const MainScreen();
+        }
+        final onboardingAsync = ref.watch(onboardingCompletedProvider);
+        return onboardingAsync.when(
+          data:
+              (completed) =>
+                  completed ? const MainScreen() : const OnboardingScreen(),
+          loading: () => const _SplashScreen(),
+          error: (_, __) => const MainScreen(),
+        );
+      },
     );
   }
 }
@@ -135,20 +161,17 @@ class _SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D1520),
-      body: Center(
+      backgroundColor:
+          isDark ? const Color(0xFF0D1520) : const Color(0xFFF5F2EB),
+      body: const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/images/logo/prayer-lock-icon.png',
-              width: 128,
-              height: 128,
-              filterQuality: FilterQuality.high,
-            ),
-            const SizedBox(height: 32),
-            const SizedBox(
+            BrandLogo(size: 128),
+            SizedBox(height: 32),
+            SizedBox(
               width: 22,
               height: 22,
               child: CircularProgressIndicator(

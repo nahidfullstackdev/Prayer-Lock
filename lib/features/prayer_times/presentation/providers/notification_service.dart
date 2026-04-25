@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/prayer_times/data/services/native_alarm_service.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/adhan_type.dart';
@@ -6,7 +9,7 @@ import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.da
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_settings.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_times.dart';
 import 'package:prayer_lock/features/prayer_times/domain/repositories/notification_repository.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notification channel IDs
@@ -54,11 +57,20 @@ class NotificationService implements NotificationRepository {
     try {
       const initSettings = InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(
+          // Request permission lazily via requestPermissions(); leave false
+          // here so the system prompt only appears when we explicitly ask.
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
       );
       await _notifications.initialize(initSettings);
-      await _createNotificationChannels();
+      if (Platform.isAndroid) {
+        await _createNotificationChannels();
+      }
       _initialised = true;
-      AppLogger.info('NotificationService initialised (native-alarm mode)');
+      AppLogger.info('NotificationService initialised');
       return true;
     } catch (e, st) {
       AppLogger.error('NotificationService.initialize failed', e, st);
@@ -71,6 +83,23 @@ class NotificationService implements NotificationRepository {
   @override
   Future<bool> requestPermissions() async {
     try {
+      if (Platform.isIOS) {
+        final plugin =
+            _notifications
+                .resolvePlatformSpecificImplementation<
+                  IOSFlutterLocalNotificationsPlugin
+                >();
+        final granted =
+            await plugin?.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            ) ??
+            false;
+        AppLogger.info('iOS notification permission granted: $granted');
+        return granted;
+      }
+
       final notifStatus = await Permission.notification.request();
       final granted = notifStatus.isGranted || notifStatus.isLimited;
       AppLogger.info('POST_NOTIFICATIONS: $notifStatus');
@@ -89,6 +118,9 @@ class NotificationService implements NotificationRepository {
 
   @override
   Future<bool> hasExactAlarmPermission() async {
+    // iOS has no analog — scheduled local notifications fire exactly once
+    // permission is granted.
+    if (!Platform.isAndroid) return true;
     try {
       final plugin =
           _notifications
@@ -148,14 +180,25 @@ class NotificationService implements NotificationRepository {
 
       final int adhanType = _resolveAdhanType(settings.adhanType, prayer.name);
 
-      await NativeAlarmService.scheduleExactPrayerAlarm(
-        id: prayer.name.index,
-        timeMs: alarmTime.millisecondsSinceEpoch,
-        prayerName: prayer.name.displayName,
-        arabicName: prayer.name.arabicName,
-        adhanType: adhanType,
-        minutesBefore: settings.notificationMinutesBefore,
-      );
+      if (Platform.isIOS) {
+        await _scheduleIosPrayerNotification(
+          id: prayer.name.index,
+          fireTime: alarmTime,
+          prayerName: prayer.name.displayName,
+          arabicName: prayer.name.arabicName,
+          adhanType: adhanType,
+          minutesBefore: settings.notificationMinutesBefore,
+        );
+      } else {
+        await NativeAlarmService.scheduleExactPrayerAlarm(
+          id: prayer.name.index,
+          timeMs: alarmTime.millisecondsSinceEpoch,
+          prayerName: prayer.name.displayName,
+          arabicName: prayer.name.arabicName,
+          adhanType: adhanType,
+          minutesBefore: settings.notificationMinutesBefore,
+        );
+      }
     }
 
     AppLogger.info('scheduleAllPrayers complete');
@@ -165,7 +208,60 @@ class NotificationService implements NotificationRepository {
 
   @override
   Future<void> cancelAllPrayers() async {
+    if (Platform.isIOS) {
+      await _notifications.cancelAll();
+      return;
+    }
     await NativeAlarmService.cancelAllPrayerAlarms();
+  }
+
+  // ── iOS scheduling ──────────────────────────────────────────────────────────
+
+  /// iOS uses flutter_local_notifications' zonedSchedule instead of the
+  /// Android native AlarmManager path. Custom adhan sound filenames are
+  /// passed through — they must be added to the Xcode Runner target as
+  /// bundle resources. If absent, iOS falls back to the default system sound.
+  Future<void> _scheduleIosPrayerNotification({
+    required int id,
+    required DateTime fireTime,
+    required String prayerName,
+    required String arabicName,
+    required int adhanType,
+    required int minutesBefore,
+  }) async {
+    final scheduled = tz.TZDateTime.from(fireTime, tz.local);
+
+    final String? soundFile = switch (adhanType) {
+      _kAdhanTypeFajr => 'adhan_fajr.caf',
+      _kAdhanTypeStandard => 'adhan.caf',
+      _ => null,
+    };
+
+    final details = NotificationDetails(
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: adhanType != _kAdhanTypeSilent,
+        sound: soundFile,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    );
+
+    final body = minutesBefore > 0
+        ? 'In $minutesBefore min — $arabicName'
+        : 'It is time for $prayerName — $arabicName';
+
+    await _notifications.zonedSchedule(
+      id,
+      '$prayerName Prayer',
+      body,
+      scheduled,
+      details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: 'prayer:$id',
+    );
   }
 
   // ── private ──────────────────────────────────────────────────────────────────

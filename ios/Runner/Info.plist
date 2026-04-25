@@ -52,12 +52,30 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>We need your location to send prayer time notifications</string>
 
+	<!-- Motion sensor permission — required by the Qibla compass -->
+	<key>NSMotionUsageDescription</key>
+	<string>Qibla compass uses the device magnetometer to point towards Makkah</string>
+
 	<!-- Background modes for notifications -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>processing</string>
 		<string>remote-notification</string>
+	</array>
+
+	<!-- Google Sign-In callback URL scheme.
+	     The scheme MUST equal REVERSED_CLIENT_ID from GoogleService-Info.plist. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.623519534939-tnpngbe6g4m6cseminale37543t6h601</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

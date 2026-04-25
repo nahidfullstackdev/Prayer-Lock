@@ -28,6 +28,14 @@ final subscriptionStatusProvider =
   return ref.read(revenueCatServiceProvider).statusStream;
 });
 
+/// Live stream of [SubscriptionInfo] — status + plan + product id + expiry.
+///
+/// Use this when the consumer needs to know which plan the user is on
+/// (e.g. the Firestore subscription-record sync).
+final subscriptionInfoProvider = StreamProvider<SubscriptionInfo>((ref) {
+  return ref.read(revenueCatServiceProvider).infoStream;
+});
+
 /// Convenience provider — true when the user has an active pro subscription.
 ///
 /// Defaults to false while the status is loading or unknown.

@@ -147,6 +147,23 @@
             </intent-filter>
         </receiver>
 
+        <!-- ── Home Screen Widget ───────────────────────────────────────────
+             Shows the next prayer name, time, and countdown at a glance.
+             Bound data is written by HomeWidgetService.dart via the
+             home_widget plugin; PrayerWidgetProvider binds it to the layout
+             and wires a launch-app tap intent.                               -->
+        <receiver
+            android:name=".PrayerWidgetProvider"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/prayer_widget_info" />
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

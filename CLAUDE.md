@@ -37,7 +37,8 @@ Built for modern Muslims who struggle with focus in a digital world, Prayer Lock
 - `isProProvider` (Riverpod) gates all Pro UI — single source of truth; reads from RevenueCat entitlement
 - The custom `ProPaywallSheet` is the only paywall UI — RevenueCat's own paywall UI (`purchases_ui_flutter`) is **not used**
 - `RevenueCatService` in `subscription/data/services/revenuecat_service.dart` handles entitlement verification and direct purchases via `Purchases.purchase(PurchaseParams.package(...))`
-- `SubscriptionRepository.purchase(String planId)` takes `'monthly'` or `'lifetime'` — matched to the RevenueCat current offering's `PackageType`
+- `SubscriptionRepository.purchase(String planId)` takes `'weekly'` or `'annual'` — matched to the RevenueCat current offering's `PackageType` (`current.weekly` / `current.annual`); falls back to `availablePackages.first` when neither is configured
+- Pricing surfaced in the paywall: **Weekly $0.99/wk** and **Yearly $14.99/yr** with a **3-day free trial** (≈ $1.25/m). Yearly is the default selection. Prices are hardcoded in `_PlanCard` / `_billingNote` until `Purchases.getOfferings()` price strings are wired in
 - `superwall_service.dart` is a stub (Superwall was replaced by RevenueCat)
 - Free users see `ProPaywallSheet` when tapping locked content — never block prayer times or full Quran (always free)
 - AdMob ads are hidden for Pro users
@@ -81,8 +82,10 @@ lib/
 │   ├── database/     # SQLite singleton (database_helper.dart)
 │   ├── errors/       # Failure hierarchy (failures.dart)
 │   ├── network/      # Dio singleton with logging interceptor (dio_client.dart)
+│   ├── startup/      # AppInitializer (two-phase critical/deferred boot)
 │   ├── theme/        # AppTheme (dark/light ThemeData) + ThemeNotifier (Riverpod)
-│   └── utils/        # AppLogger
+│   ├── utils/        # AppLogger
+│   └── widgets/      # Cross-feature widgets (BrandLogo, AdhanTestWidget)
 ├── features/
 │   └── <feature>/
 │       ├── data/
@@ -116,22 +119,34 @@ lib/
 | **Auth**          | ✅     | ✅   | ✅ `auth_screen.dart` (bottom sheet only — no standalone screen)                  | —                           |
 | **AdMob Ads**     | —      | —    | ⏳ Not started                                                                    | Free only                   |
 | **App Blocker**   | ✅     | ✅   | ✅ `app_blocker_screen.dart` + `AppBlockerNotifier`                               | Pro                         |
-| **Home Widgets**  | —      | —    | ⏳ Not started                                                                    | Pro                         |
+| **Home Widgets**  | —      | ✅   | ⏳ Data-only: `HomeWidgetService` + native `PrayerWidgetProvider.kt` + `layout/prayer_widget.xml` — no in-app management UI yet | Pro                         |
 | **Subscription**  | ✅     | ✅   | ✅ `pro_paywall_sheet.dart`; no dedicated screen                                  | —                           |
-| **Calendar**      | ⏳     | ⏳   | ⏳ Folder exists but empty                                                        | Free                        |
+| **Calendar**      | ⏳     | ⏳   | ✅ `islamic_calendar_screen.dart`, `ramadan_tracker_screen.dart` (presentation only — `data/` & `domain/` folders exist but empty) | Free                        |
 
 `main_screen.dart` imports `HadithScreen` and `DuaDhikrScreen` from their feature folders. `MoreScreen` remains inline in `main_screen.dart`. `selectedTabProvider` (bottom nav index) is defined in `main.dart`.
 
-**App startup sequence** (order matters):
-1. `Firebase.initializeApp()` + Crashlytics error hooks (must be first — auth depends on it)
-2. `AndroidAlarmManager.initialize()`
-3. `Hive.initFlutter()` + open `quran_data` and `app_blocker` boxes
-4. `PrayerTimesLocalDataSource().initialize()` (registers Hive adapters + opens boxes)
-5. `NotificationService().initialize()` + `requestPermissions()`
-6. `RevenueCatService.configure()`
-7. `runApp(ProviderScope(...))`
+**App startup — two-phase boot** (for cold-start performance `main` only awaits Firebase):
 
-`main.dart` is a `ConsumerWidget` that watches `onboardingCompletedProvider`. **Current state**: `_AppHome` routes to `MainScreen` for both completed/not-completed branches — the onboarding flow is effectively bypassed. Don't "fix" this without asking; `OnboardingScreen` still exists and may be reconnected deliberately later.
+1. **Pre-`runApp`** — the only thing blocking the first frame. Firebase has to come first so Crashlytics hooks capture errors from frame 0:
+   - `Firebase.initializeApp()` + `FlutterError.onError` / `PlatformDispatcher.instance.onError` → Crashlytics
+   - `setCrashlyticsCollectionEnabled(!kDebugMode)`
+   - `runApp(ProviderScope(...))`
+2. **Critical init** — `AppInitializer.runCritical()` in [lib/core/startup/app_initializer.dart](lib/core/startup/app_initializer.dart). Awaited inside `_AppHome.initState()` while `_SplashScreen` is on screen. Runs in parallel after `Hive.initFlutter()`:
+   - `Hive.openBox('quran_data')`
+   - `Hive.openBox('app_blocker')`
+   - `PrayerTimesLocalDataSource().initialize()` (registers its own Hive adapters + opens prayer boxes)
+3. **Deferred init** — `AppInitializer.runDeferred()` fired via `unawaited(...)` once critical completes. The UI is already interactive. Each task is guarded so one failure can't abort the rest:
+   - `AndroidAlarmManager.initialize()` (Android only)
+   - `tzdata.initializeTimeZones()` + `FlutterTimezone.getLocalTimezone()` → `tz.setLocalLocation`
+   - `NotificationService().initialize()` (creates notification channels)
+   - `RevenueCatService.configure()` (network round-trip; `isProProvider` treats the `unknown` seed as free until the first real `CustomerInfo` arrives)
+   - `HomeWidgetService.initialize()`
+
+`_AppHome` is a `ConsumerStatefulWidget`. Its `initState` captures the critical `Future` once; the `FutureBuilder` in `build` shows `_SplashScreen` until it resolves, then routes via `onboardingCompletedProvider` — completed → `MainScreen`, not completed → `OnboardingScreen`.
+
+Rules:
+- Don't move services out of `runDeferred` back into `main()` — that undoes the cold-start work. If a deferred service needs to be ready before a specific screen renders, gate that screen on the service, not the whole app.
+- `subscriptionSyncServiceProvider` is activated inside `MuslimCompanionApp.build` before RevenueCat finishes configuring; it only subscribes to streams, so this is intentional and safe. The first real `CustomerInfo` emission pushes through once configure lands.
 
 ## Permission Bootstrap
 
@@ -237,9 +252,9 @@ if (!isSignedIn) {
 `showProPaywall(context, repo, placement: '...')` presents `ProPaywallSheet` as a modal bottom sheet. The sheet owns all paywall UI and:
 
 1. Checks `isSignedInProvider`; shows `AuthSheet` first if not signed in
-2. User selects Monthly or Lifetime plan card
-3. On "Unlock Pro" tap, calls `repo.purchase(planId)` where `planId` is `'monthly'` or `'lifetime'`
-4. `RevenueCatService.purchase()` fetches the current offering, finds the matching `Package`, then calls `Purchases.purchase(PurchaseParams.package(pkg))`
+2. User selects Weekly or Yearly plan card (Yearly is default; carries the 3-day free trial badge)
+3. On "Unlock Pro" tap, calls `repo.purchase(planId)` where `planId` is `'weekly'` or `'annual'`
+4. `RevenueCatService.purchase()` fetches the current offering, picks `current.weekly` / `current.annual`, then calls `Purchases.purchase(PurchaseParams.package(pkg))`
 
 The `onUpgradeTap` callback type on `ProPaywallSheet` is `Future<void> Function(String planId)`. The `showProPaywall` helper wires it as `(planId) => repo.purchase(planId)`.
 
@@ -326,6 +341,25 @@ Dark-first design. Defined in `core/theme/`:
 - Light ("Ivory Sanctuary") — bg `#F5F2EB`, surface `#FFFFFF`, primary `#15803D`, secondary gold `#C9A961`
 
 All widgets use `Theme.of(context).colorScheme` — no hardcoded colors. Use `Theme.of(context).brightness == Brightness.dark` for the rare cases where behavior differs by theme.
+
+## Brand Assets
+
+Pre-sized launcher artwork is committed directly into the native projects — `flutter_launcher_icons` is **not** used (it can't emit both dark and light variants). The Flutter-side source PNGs live in three folders registered under `flutter.assets` in `pubspec.yaml`:
+
+- **`assets/android/`** — dark launcher icons at every density (`ic_launcher_{mdpi_48,hdpi_72,xhdpi_96,xxhdpi_144,xxxhdpi_192}.png`) + `play_store_512.png`. These map 1:1 into:
+  - `android/app/src/main/res/mipmap-*/ic_launcher.png` (legacy square)
+  - `android/app/src/main/res/drawable-*/ic_launcher_foreground.png` (adaptive foreground — no inset, source already has launcher-safe padding)
+  - Adaptive background color `#E8E2CF` lives in `values/colors.xml`; the adaptive XML is `mipmap-anydpi-v26/ic_launcher.xml`
+- **`assets/ios/`** — iOS AppIcon images by pixel size (`AppIcon_{20,29,40,58,60,80,87,120,152,167,180,1024}.png`). Copied verbatim into `ios/Runner/Assets.xcassets/AppIcon.appiconset/` and referenced by `Contents.json` using modern slots only (pre-iOS 7 legacy 50/57/72/76@1x were dropped)
+- **`assets/light/`** — light-mode variants (`AppIcon_{192,512,1024}_light.png`) used by `BrandLogo` only
+
+When the artwork changes, re-copy the density variants into their native folders manually — there is no generator step.
+
+**In-app logo — `BrandLogo`** ([lib/core/widgets/brand_logo.dart](lib/core/widgets/brand_logo.dart)):
+- Picks `assets/android/play_store_512.png` in dark mode and `assets/light/AppIcon_512_light.png` in light mode via `Theme.of(context).brightness`
+- Used by `_SplashScreen` in `main.dart` (128 px, background also flips by theme — `#0D1520` dark / `#F5F2EB` light) and by `_GlowLogo` in `onboarding_screen.dart` (110 px inside a radial-gradient glow)
+
+Note: the **native** Android launch screen (`drawable/launch_background.xml`) still uses the white default — `flutter_native_splash` is not yet integrated.
 
 ## UI/UX Guidelines
 
@@ -418,7 +452,7 @@ iOS: hide App Blocker UI entirely — sandboxing prevents app monitoring.
 
 ## Home Screen Widgets (Pro) — Android
 
-- Package: `home_widget` — **not yet added to pubspec.yaml**
+- Package: `home_widget` (in `pubspec.yaml`). Dart bridge: [lib/features/home_widget/data/services/home_widget_service.dart](lib/features/home_widget/data/services/home_widget_service.dart). Native provider: `android/app/src/main/kotlin/com/mdnahid/prayerlock/PrayerWidgetProvider.kt` (registered in `AndroidManifest.xml`)
 - Widget shows: next prayer name, time, and countdown
 - Updated via `HomeWidget.saveWidgetData` + `HomeWidget.updateWidget` whenever prayer times refresh
 - Widget layout defined in `android/app/src/main/res/layout/prayer_widget.xml`
@@ -467,7 +501,7 @@ storeFile=../upload-keystore.jks
 | `intl`                        | Date/time formatting                                                           |
 | `http`                        | Lightweight HTTP (supplement to Dio where needed)                              |
 | `google_mobile_ads`           | AdMob — **not yet added to pubspec.yaml**                                      |
-| `home_widget`                 | Home screen widgets (Pro) — **not yet added to pubspec.yaml**                  |
+| `home_widget`                 | Home screen widgets (Pro) — bridges Dart ↔ Android AppWidget                   |
 | `flutter_svg`                 | SVG asset rendering                                                             |
 | `cached_network_image`        | Network image caching                                                          |
 
