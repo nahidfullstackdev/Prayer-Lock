@@ -3,26 +3,18 @@ import 'package:prayer_lock/features/prayer_times/domain/entities/adhan_type.dar
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_settings.dart';
 
-part 'prayer_settings_model.g.dart';
-
-/// Hive model for storing prayer settings
-@HiveType(typeId: 1)
+/// Hive model for storing prayer settings.
+/// Adapter is hand-written below — typeId 1, field layout must stay
+/// identical to the previously generated adapter so existing user
+/// data on disk keeps decoding. Field 4 (adhanTypeIndex) is missing
+/// from records written before that field was added; the read path
+/// falls back to 0 (AdhanType.standard).
 class PrayerSettingsModel extends HiveObject {
-  @HiveField(0)
   final int calculationMethod;
-
-  @HiveField(1)
   final int madhab;
-
-  @HiveField(2)
-  final Map<String, bool> notificationsEnabled; // Hive doesn't support enum keys directly
-
-  @HiveField(3)
+  // Hive doesn't support enum keys directly, hence String keys.
+  final Map<String, bool> notificationsEnabled;
   final int notificationMinutesBefore;
-
-  /// Index of AdhanType enum — stored as int for Hive compatibility.
-  /// Defaults to 0 (AdhanType.standard) when reading old records that lack this field.
-  @HiveField(4)
   final int adhanTypeIndex;
 
   PrayerSettingsModel({
@@ -74,4 +66,52 @@ class PrayerSettingsModel extends HiveObject {
       adhanType: adhanType,
     );
   }
+}
+
+class PrayerSettingsModelAdapter extends TypeAdapter<PrayerSettingsModel> {
+  @override
+  final int typeId = 1;
+
+  @override
+  PrayerSettingsModel read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return PrayerSettingsModel(
+      calculationMethod: fields[0] as int,
+      madhab: fields[1] as int,
+      notificationsEnabled: (fields[2] as Map).cast<String, bool>(),
+      notificationMinutesBefore: fields[3] as int,
+      // Field 4 may be absent in records written before adhanType was added.
+      // Falling back to 0 (AdhanType.standard) keeps existing users on adhan.
+      adhanTypeIndex: fields[4] as int? ?? 0,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, PrayerSettingsModel obj) {
+    writer
+      ..writeByte(5)
+      ..writeByte(0)
+      ..write(obj.calculationMethod)
+      ..writeByte(1)
+      ..write(obj.madhab)
+      ..writeByte(2)
+      ..write(obj.notificationsEnabled)
+      ..writeByte(3)
+      ..write(obj.notificationMinutesBefore)
+      ..writeByte(4)
+      ..write(obj.adhanTypeIndex);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PrayerSettingsModelAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
 }

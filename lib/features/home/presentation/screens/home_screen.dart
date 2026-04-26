@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:prayer_lock/core/widgets/adhan_test_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer.dart';

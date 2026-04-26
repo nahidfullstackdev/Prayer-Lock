@@ -144,16 +144,58 @@ final prayerTimesProvider =
     getPrayerTimesUseCase: ref.read(getPrayerTimesUseCaseProvider),
     getNextPrayerUseCase: ref.read(getNextPrayerUseCaseProvider),
     notificationRepository: ref.read(notificationRepositoryProvider),
+    // Notifier reads current settings via this callback so it can always
+    // schedule on a successful prayer-times load — even on the very first
+    // run before the user has opened the notification settings sheet.
+    readSettings: () => ref.read(prayerSettingsProvider).settings,
   );
 
-  // Re-fetch whenever the calculation method changes.
+  // Re-fetch whenever the calculation method changes (changes the API result).
   ref.listen(
     prayerSettingsProvider.select((s) => s.settings.calculationMethod),
-    (_, __) => notifier.refresh(),
+    (_, __) => notifier.refresh(
+      settings: ref.read(prayerSettingsProvider).settings,
+    ),
   );
+
+  // Reschedule whenever any setting that affects alarms changes:
+  //   • per-prayer toggles (notificationsEnabled)
+  //   • notificationMinutesBefore
+  //   • adhanType
+  //   • madhab (changes the prayer time itself, hence the alarm time)
+  // This also catches the cold-start race where prayerSettings finishes
+  // loading from Hive *after* the notifier has already loaded prayer times.
+  // The settings sheet's explicit `_reschedule(ref)` is still safe — the
+  // native pipeline cancels-then-reschedules, so duplicates are not possible.
+  ref.listen(prayerSettingsProvider, (prev, next) {
+    if (next.isLoading) return;
+
+    if (prev != null) {
+      final p = prev.settings;
+      final n = next.settings;
+      final unchanged = p.madhab == n.madhab &&
+          p.notificationMinutesBefore == n.notificationMinutesBefore &&
+          p.adhanType == n.adhanType &&
+          _mapEq(p.notificationsEnabled, n.notificationsEnabled);
+      if (unchanged) return;
+    }
+    // scheduleNotifications no-ops internally when prayerTimes is null,
+    // so we don't need to (and can't, due to protected `state`) check it
+    // from inside this provider factory.
+    notifier.scheduleNotifications(next.settings);
+  });
 
   return notifier;
 });
+
+bool _mapEq<K, V>(Map<K, V> a, Map<K, V> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (final entry in a.entries) {
+    if (b[entry.key] != entry.value) return false;
+  }
+  return true;
+}
 
 /// Prayer settings state notifier provider
 final prayerSettingsProvider =

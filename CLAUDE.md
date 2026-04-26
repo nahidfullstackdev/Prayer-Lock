@@ -59,7 +59,8 @@ flutter analyze
 flutter test
 flutter test test/path/to/test_file.dart
 
-# Code generation (Riverpod, Hive) — always use the flag to avoid conflicts
+# Code generation (Riverpod only — Hive adapters are hand-written, see "Hive Adapters" below)
+# Always use the flag to avoid conflicts
 dart run build_runner build --delete-conflicting-outputs
 dart run build_runner watch --delete-conflicting-outputs
 
@@ -271,6 +272,28 @@ Managed by the singleton `DatabaseHelper` in `core/database/database_helper.dart
 | `last_read` | Single-row table tracking last reading position                                         |
 
 Quran data is fetched from the Al-Quran Cloud API and cached in SQLite. Prayer times use the Aladhan API and are cached in Hive.
+
+## Hive Adapters (Hand-Written — Do Not Regenerate)
+
+`hive_generator` was removed from `dev_dependencies` because it caps `analyzer` at 6.11.0, which conflicts with `source_gen` / Dart macros on macOS (iOS toolchain). Hive itself (`hive: ^2.2.3`, `hive_flutter: ^1.1.0`) is still used at runtime — only the codegen step is gone.
+
+The three model files in `features/prayer_times/data/models/` each include a hand-written `TypeAdapter<T>` at the bottom of the same file:
+
+| File                              | typeId | Field count | Notes                                                                                  |
+| --------------------------------- | ------ | ----------- | -------------------------------------------------------------------------------------- |
+| `cached_prayer_times_model.dart`  | 0      | 13          | Aladhan response cache, 30-day retention                                               |
+| `prayer_settings_model.dart`      | 1      | 5           | Field 4 (`adhanTypeIndex`) was added later — read path falls back to `0` if absent    |
+| `location_data_model.dart`        | 2      | 5           | GPS cache                                                                              |
+
+**Rules when touching these files:**
+
+- **Wire format is load-bearing.** The `writeByte` field markers, `numOfFields` header, and per-field types must stay byte-identical to the previously generated adapters or existing user installs will fail to decode their cached data.
+- **Never reuse a `typeId`** for a different model — Hive caches type registrations on disk.
+- **To add a field:** append it as the next-highest field number in `write()`, increase `writeByte(N)`, and in `read()` use `fields[N] as T? ?? defaultValue` so old records (which won't have the field) still decode. The existing `adhanTypeIndex` is the worked example.
+- **Do not reintroduce `hive_generator`** or `part 'X.g.dart'` directives — that brings the macOS analyzer conflict back. If a fourth Hive model is needed, hand-write the adapter the same way.
+- Adapter registration in `prayer_times_local_data_source.dart` (`Hive.registerAdapter(...)`) and `Hive.openBox` calls in `app_initializer.dart` are unchanged — adapter class names and typeIds were preserved.
+
+The Quran and App Blocker datasources use untyped `Box<dynamic>` and never needed adapters.
 
 ## State Management
 

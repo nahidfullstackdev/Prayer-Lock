@@ -53,6 +53,13 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
   final GetPrayerTimesUseCase getPrayerTimesUseCase;
   final GetNextPrayerUseCase getNextPrayerUseCase;
   final NotificationRepository notificationRepository;
+
+  /// Pulls the current persisted prayer settings. Injected as a callback so
+  /// this notifier doesn't need to import its own provider file (would be a
+  /// circular dependency). Returning the default `PrayerSettings()` is a
+  /// safe fallback — defaults enable all 5 prayers with no advance offset.
+  final PrayerSettings Function() _readSettings;
+
   Timer? _countdownTimer;
 
   /// Home-screen widget pushes are throttled to once per minute to avoid
@@ -64,7 +71,9 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
     required this.getPrayerTimesUseCase,
     required this.getNextPrayerUseCase,
     required this.notificationRepository,
-  }) : super(const PrayerTimesState()) {
+    required PrayerSettings Function() readSettings,
+  })  : _readSettings = readSettings,
+        super(const PrayerTimesState()) {
     loadPrayerTimes();
   }
 
@@ -103,10 +112,12 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
         );
         _startCountdown();
 
-        // Schedule notifications when settings are provided.
-        if (settings != null) {
-          _scheduleNotifications(prayerTimes, settings);
-        }
+        // Always schedule on a successful load. Without this, a fresh install
+        // never schedules anything until the user opens the notification
+        // settings sheet — which most users never do.
+        // Falls back to current persisted settings (or defaults) when the
+        // caller didn't pass an explicit settings object.
+        _scheduleNotifications(prayerTimes, settings ?? _readSettings());
       },
     );
   }
