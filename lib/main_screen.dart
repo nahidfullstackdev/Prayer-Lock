@@ -215,35 +215,49 @@ class MoreScreen extends ConsumerWidget {
     );
   }
 
-  /// Tries to pin the Prayer Lock widget to the launcher. Falls back to
-  /// an instructional sheet when the launcher doesn't support programmatic
-  /// pinning (common on older Android launchers and always on iOS).
-  Future<void> _addHomeWidget(BuildContext context) async {
+  /// Opens the instructional sheet. The sheet's CTA is paywall-gated for
+  /// free users and triggers the launcher pin (when supported) for Pro users.
+  Future<void> _addHomeWidget(BuildContext context, WidgetRef ref) async {
     if (!Platform.isAndroid) {
-      _showAddWidgetSheet(context, manual: true);
+      _showAddWidgetSheet(context, ref, manual: true);
       return;
     }
 
     final supported = await HomeWidgetService.isPinWidgetSupported();
     if (!context.mounted) return;
 
-    if (!supported) {
-      _showAddWidgetSheet(context, manual: true);
-      return;
-    }
-
-    // The plugin does not report whether the launcher prompt was accepted,
-    // so we just fire-and-forget. If the launcher dialog is dismissed, the
-    // user can still long-press the home screen and add it manually.
-    await HomeWidgetService.requestPinWidget();
+    _showAddWidgetSheet(context, ref, manual: !supported);
   }
 
-  void _showAddWidgetSheet(BuildContext context, {required bool manual}) {
+  void _showAddWidgetSheet(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool manual,
+  }) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddWidgetSheet(manual: manual),
+      builder: (sheetCtx) => _AddWidgetSheet(
+        manual: manual,
+        onAddTap: () async {
+          Navigator.pop(sheetCtx);
+          if (!ref.read(isProProvider)) {
+            if (!context.mounted) return;
+            await showProPaywall(
+              context,
+              ref.read(subscriptionRepositoryProvider),
+              placement: 'home_widget_locked',
+              featureTitle: 'Home Screen Widget',
+            );
+            return;
+          }
+          if (Platform.isAndroid &&
+              await HomeWidgetService.isPinWidgetSupported()) {
+            await HomeWidgetService.requestPinWidget();
+          }
+        },
+      ),
     );
   }
 
@@ -471,7 +485,10 @@ class MoreScreen extends ConsumerWidget {
                       icon: Icons.widgets_rounded,
                       color: const Color(0xFF0EA5E9),
                       title: 'Home Screen Widget',
-                      onTap: () => _addHomeWidget(context),
+                      trailing: ref.watch(isProProvider)
+                          ? null
+                          : const _ProBadge(),
+                      onTap: () => _addHomeWidget(context, ref),
                     ),
                     if (Platform.isAndroid) ...[
                       Divider(height: 1, indent: 68, color: cs.outlineVariant),
@@ -1009,9 +1026,10 @@ class _PermRow extends StatelessWidget {
 // WidgetKit must be pinned by the user from the widget gallery.
 
 class _AddWidgetSheet extends StatelessWidget {
-  const _AddWidgetSheet({required this.manual});
+  const _AddWidgetSheet({required this.manual, required this.onAddTap});
 
   final bool manual;
+  final VoidCallback onAddTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1122,7 +1140,7 @@ class _AddWidgetSheet extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: onAddTap,
                   style: FilledButton.styleFrom(
                     backgroundColor: cs.primary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1131,7 +1149,7 @@ class _AddWidgetSheet extends StatelessWidget {
                     ),
                   ),
                   child: const Text(
-                    'Got it',
+                    'Add to home screen',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,

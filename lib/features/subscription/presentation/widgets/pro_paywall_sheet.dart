@@ -40,6 +40,7 @@ Future<void> showProPaywall(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (_) => ProPaywallSheet(
       featureTitle: featureTitle,
@@ -138,7 +139,7 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (!widget.embedded) _buildHandle(cs),
+              if (!widget.embedded) _buildTopBar(cs),
               if (widget.embedded) const SizedBox(height: 8),
               _buildHeader(cs, isDark),
               const SizedBox(height: 24),
@@ -194,20 +195,42 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
     );
   }
 
-  // ── Handle ──────────────────────────────────────────────────────────────────
+  // ── Top bar (handle + close) ────────────────────────────────────────────────
 
-  Widget _buildHandle(ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 14),
-      child: Center(
-        child: Container(
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: cs.outlineVariant,
-            borderRadius: BorderRadius.circular(2),
+  Widget _buildTopBar(ColorScheme cs) {
+    return SizedBox(
+      height: 48,
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
           ),
-        ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: IconButton(
+              onPressed: () => Navigator.pop(context),
+              icon: Icon(
+                Icons.close_rounded,
+                color: cs.onSurfaceVariant,
+                size: 22,
+              ),
+              tooltip: 'Close',
+              splashRadius: 20,
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -8,6 +8,7 @@ import 'package:prayer_lock/features/prayer_times/domain/entities/prayer.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_settings.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_times.dart';
 import 'package:prayer_lock/features/prayer_times/domain/repositories/notification_repository.dart';
+import 'package:prayer_lock/features/prayer_times/domain/repositories/prayer_times_repository.dart';
 import 'package:prayer_lock/features/prayer_times/domain/usecases/get_next_prayer.dart';
 import 'package:prayer_lock/features/prayer_times/domain/usecases/get_prayer_times.dart';
 
@@ -53,6 +54,7 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
   final GetPrayerTimesUseCase getPrayerTimesUseCase;
   final GetNextPrayerUseCase getNextPrayerUseCase;
   final NotificationRepository notificationRepository;
+  final PrayerTimesRepository prayerTimesRepository;
 
   /// Pulls the current persisted prayer settings. Injected as a callback so
   /// this notifier doesn't need to import its own provider file (would be a
@@ -61,6 +63,7 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
   final PrayerSettings Function() _readSettings;
 
   Timer? _countdownTimer;
+  StreamSubscription<String>? _cacheUpdatesSub;
 
   /// Home-screen widget pushes are throttled to once per minute to avoid
   /// hitting Android's AppWidget update throttling on devices where the
@@ -71,20 +74,44 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
     required this.getPrayerTimesUseCase,
     required this.getNextPrayerUseCase,
     required this.notificationRepository,
+    required this.prayerTimesRepository,
     required PrayerSettings Function() readSettings,
   })  : _readSettings = readSettings,
         super(const PrayerTimesState()) {
+    // Subscribe to stale-while-revalidate cache writes. When the repo
+    // background-refreshes today's data, we silently re-derive UI state
+    // and reschedule notifications without flashing a loading spinner.
+    _cacheUpdatesSub = prayerTimesRepository.cacheUpdates.listen(_onCacheUpdate);
     loadPrayerTimes();
+  }
+
+  void _onCacheUpdate(String dateKey) {
+    if (dateKey != _todayKey()) return;
+    AppLogger.info('Cache updated for $dateKey — silent reload');
+    loadPrayerTimes(silent: true);
+  }
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
   }
 
   /// Load prayer times for today.
   /// Pass [settings] to reschedule notifications after a successful load.
+  /// Set [silent] to skip the loading-spinner state transition — used when
+  /// reacting to a stale-while-revalidate background refresh that already
+  /// has fresh data sitting in the cache.
   Future<void> loadPrayerTimes({
     LocationData? location,
     PrayerSettings? settings,
+    bool silent = false,
   }) async {
-    state = state.copyWith(isLoading: true, errorMessage: null);
-    AppLogger.info('Loading prayer times...');
+    if (!silent) {
+      state = state.copyWith(isLoading: true, errorMessage: null);
+    }
+    AppLogger.info('Loading prayer times${silent ? ' (silent)' : ''}...');
 
     final result = await getPrayerTimesUseCase(location: location);
 
@@ -204,6 +231,7 @@ class PrayerTimesNotifier extends StateNotifier<PrayerTimesState> {
 
   @override
   void dispose() {
+    _cacheUpdatesSub?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
   }

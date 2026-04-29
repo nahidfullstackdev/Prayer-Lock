@@ -124,36 +124,41 @@ class CachedPrayerTimesModel extends HiveObject {
     DateTime date,
     LocationData location,
     PrayerSettings settings,
+  ) =>
+      invalidationReason(date, location, settings) == null;
+
+  /// Returns null when the cache is valid, or a short human-readable string
+  /// describing the first failed check. Lets the repository log *why* it had
+  /// to hit the API when troubleshooting "cache never used" reports.
+  String? invalidationReason(
+    DateTime date,
+    LocationData location,
+    PrayerSettings settings,
   ) {
-    // Check if date matches
     if (dateKey != _formatDateKey(date)) {
-      return false;
+      return 'date mismatch (cached=$dateKey, requested=${_formatDateKey(date)})';
     }
-
-    // Check if calculation method or madhab changed — must re-fetch from API
-    if (calculationMethod != settings.calculationMethod ||
-        madhab != settings.madhab) {
-      return false;
+    if (calculationMethod != settings.calculationMethod) {
+      return 'method changed (cached=$calculationMethod, current=${settings.calculationMethod})';
     }
-
-    // Check if location hasn't changed significantly (>10km)
+    if (madhab != settings.madhab) {
+      return 'madhab changed (cached=$madhab, current=${settings.madhab})';
+    }
     final cachedLocation = LocationData(
       latitude: latitude,
       longitude: longitude,
       timestamp: DateTime.now(),
     );
     if (cachedLocation.isDifferentFrom(location)) {
-      return false;
+      return 'location moved >10km '
+          '(cached=$latitude,$longitude → current=${location.latitude},${location.longitude})';
     }
-
-    // Check if cache is not older than 30 days
     final cacheAge = DateTime.now().millisecondsSinceEpoch ~/ 1000 - cachedAt;
     const thirtyDaysInSeconds = 30 * 24 * 60 * 60;
     if (cacheAge > thirtyDaysInSeconds) {
-      return false;
+      return 'cache aged out (${cacheAge ~/ 86400}d old)';
     }
-
-    return true;
+    return null;
   }
 
   /// Format date as 'yyyy-MM-dd'

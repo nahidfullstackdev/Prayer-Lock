@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:prayer_lock/core/widgets/adhan_test_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer.dart';
@@ -421,13 +420,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 bgIcon: Icons.shield_outlined,
                 title: 'App Blocker',
                 subtitle: 'Block distracting\napps during prayer',
-                onTap:
-                    () => Navigator.push(
+                onTap: () {
+                  if (ref.read(isProProvider)) {
+                    Navigator.push(
                       context,
                       MaterialPageRoute<void>(
                         builder: (_) => const AppBlockerScreen(),
                       ),
-                    ),
+                    );
+                  } else {
+                    showProPaywall(
+                      context,
+                      ref.read(subscriptionRepositoryProvider),
+                      placement: 'home_app_blocker_locked',
+                      featureTitle: 'App Blocker',
+                    );
+                  }
+                },
               ),
             ),
             const SizedBox(width: 10),

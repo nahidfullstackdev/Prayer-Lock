@@ -62,7 +62,7 @@ class LocationRepositoryImpl implements LocationRepository {
   @override
   Future<Either<Failure, LocationData?>> getLastKnownLocation() async {
     try {
-      final model = await localDataSource.getLastLocation();
+      final model = localDataSource.getLastLocation();
       final location = model?.toEntity();
       return Right(location);
     } catch (e, stackTrace) {

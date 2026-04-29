@@ -135,7 +135,7 @@ lib/
 2. **Critical init** — `AppInitializer.runCritical()` in [lib/core/startup/app_initializer.dart](lib/core/startup/app_initializer.dart). Awaited inside `_AppHome.initState()` while `_SplashScreen` is on screen. Runs in parallel after `Hive.initFlutter()`:
    - `Hive.openBox('quran_data')`
    - `Hive.openBox('app_blocker')`
-   - `PrayerTimesLocalDataSource().initialize()` (registers its own Hive adapters + opens prayer boxes)
+   - `PrayerTimesLocalDataSource().initialize()` (registers its own Hive adapters + opens prayer boxes). The data source is a **singleton via `factory PrayerTimesLocalDataSource()`** so the Riverpod provider receives the same instance that AppInitializer just initialised — both must agree, otherwise the `late final` boxes would only be assigned on one side. `initialize()` is idempotent (shared `_initFuture`).
 3. **Deferred init** — `AppInitializer.runDeferred()` fired via `unawaited(...)` once critical completes. The UI is already interactive. Each task is guarded so one failure can't abort the rest:
    - `AndroidAlarmManager.initialize()` (Android only)
    - `tzdata.initializeTimeZones()` + `FlutterTimezone.getLocalTimezone()` → `tz.setLocalLocation`
@@ -148,6 +148,36 @@ lib/
 Rules:
 - Don't move services out of `runDeferred` back into `main()` — that undoes the cold-start work. If a deferred service needs to be ready before a specific screen renders, gate that screen on the service, not the whole app.
 - `subscriptionSyncServiceProvider` is activated inside `MuslimCompanionApp.build` before RevenueCat finishes configuring; it only subscribes to streams, so this is intentional and safe. The first real `CustomerInfo` emission pushes through once configure lands.
+
+## Offline-First Prayer Times Cache
+
+`PrayerTimesRepositoryImpl` and `PrayerTimesLocalDataSource` enforce a contract: **the UI must never show a "no data" state when the cache holds any entry.** Treat this as load-bearing — it is what makes the app usable offline at midnight, on a flaky train, or after the user has opened it once and then gone airplane-mode.
+
+**3-tier cache resolver** — `PrayerTimesLocalDataSource.resolveCachedPrayerTimes({dateKey, date})` walks:
+
+1. Exact `dateKey` match
+2. Same year+month, latest `dateKey`
+3. Globally most-recently-cached entry (`getLatestCache()`)
+
+Returns null only when the box is completely empty. **Never call `getCachedPrayerTimes(dateKey)` alone for a user-facing read** — use the resolver so fallback kicks in. Direct `getCachedPrayerTimes` is reserved for "is this *exact* date already cached?" checks (SWR validity, pre-warm dedup).
+
+**Repository decision flow** in `PrayerTimesRepositoryImpl.getPrayerTimes`:
+
+1. Exact cache fresh & valid → return now. If older than soft TTL (1h), fire silent stale-while-revalidate refresh.
+2. Online → hit Aladhan. On success cache and return.
+3. Offline OR network failed → resolve via the 3-tier fallback. If we were online (transient failure), queue a background retry for the requested dateKey.
+4. Cache truly empty → only now return `Failure`.
+
+After every successful read, `_maybePrewarmNextDay()` fires — so opening the app at any point on day N also fetches day N+1 in the background. The next calendar rollover finds the cache already warm even if the user is offline at 12:01am.
+
+**Background-fetch dedup** — `_scheduleBackgroundRefresh()` is the single choke-point. SWR, pre-warm, and post-failure retries all funnel through it; a `_inFlightRefreshes` set keyed by `dateKey` prevents duplicate concurrent fetches.
+
+**`cacheUpdates` Stream** — `PrayerTimesRepository.cacheUpdates` emits a `dateKey` after every successful background write. `PrayerTimesNotifier._onCacheUpdate` filters to today's key and calls `loadPrayerTimes(silent: true)` — no spinner flash, just fresh data. Tomorrow's pre-warm emit is harmless (filtered out).
+
+Rules when touching this code:
+- Reads from `PrayerTimesLocalDataSource` are **synchronous** (the boxes are `late final` after `initialize()`). Don't add `await` on reads — the analyzer will warn.
+- Writes (`cachePrayerTimes`, `saveSettings`, `saveLocation`) stay async because Hive's persistence is async.
+- The dateKey returned by the fallback may not match the requested date. Caller should accept that the entity's `date` reflects when the cached times were originally for, not "today". This is the deliberate trade-off vs. a blank screen.
 
 ## Permission Bootstrap
 
@@ -527,12 +557,13 @@ storeFile=../upload-keystore.jks
 | `home_widget`                 | Home screen widgets (Pro) — bridges Dart ↔ Android AppWidget                   |
 | `flutter_svg`                 | SVG asset rendering                                                             |
 | `cached_network_image`        | Network image caching                                                          |
+| `connectivity_plus`           | Wrapped by `lib/core/network/connectivity_service.dart` — `isOnline()` one-shot + `onStatusChange` distinct stream. Repo uses it to gate network calls; `isOnlineProvider` drives the auto-refresh-on-reconnect listener in `prayer_times_providers.dart`. Note: reports *interface* state, not host reachability — captive portals still report online, hence the repository's stale-cache fallback on `DioException`. |
 
 ## Critical Notes
 
 1. **Prayer Notifications**: MUST be reliable. Use the native alarm pipeline (see *Prayer Notifications* section) — never revert to the `android_alarm_manager_plus` Dart-isolate path, which is killed by OEM battery optimization. Test on Xiaomi, Infinix, and OPPO in addition to stock Android.
 2. **Quranic Text**: Triple-check accuracy. Handle Arabic text with utmost respect.
-3. **Offline**: Most features must work without internet. SQLite is primary for Quran/Hadith; Hive for settings/cache.
+3. **Offline**: Most features must work without internet. SQLite is primary for Quran/Hadith; Hive for settings/cache. Prayer times follow an explicit offline-first contract — see *Offline-First Prayer Times Cache* section. Use `resolveCachedPrayerTimes` for fallback, never `getCachedPrayerTimes` alone for user-facing reads.
 4. **Privacy**: Location used only for prayer times. App Blocker usage data never leaves the device.
 5. **Performance**: Cold start < 2s, 60 FPS, memory < 150 MB, APK < 50 MB.
 6. **Pro Gating**: Always check `isProProvider` before rendering locked content. Never hard-block prayer times or full Quran.

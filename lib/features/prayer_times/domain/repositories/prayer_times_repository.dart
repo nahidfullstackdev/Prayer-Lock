@@ -22,4 +22,15 @@ abstract class PrayerTimesRepository {
 
   /// Clear cached prayer times (for manual refresh or testing)
   Future<Either<Failure, void>> clearCache();
+
+  /// Emits a date key (`yyyy-MM-dd`) whenever a stale-while-revalidate
+  /// background refresh has just written fresh data into the cache for
+  /// that date. UI layers (e.g. the prayer-times notifier) listen here
+  /// to silently re-derive their state without showing a loading spinner.
+  Stream<String> get cacheUpdates;
+
+  /// Releases stream resources. Safe to call multiple times. Wired via
+  /// `ref.onDispose` in the Riverpod provider so hot-restarts do not leak
+  /// the underlying `StreamController`.
+  Future<void> dispose();
 }
