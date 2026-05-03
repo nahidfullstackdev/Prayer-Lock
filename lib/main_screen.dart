@@ -8,6 +8,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:prayer_lock/core/theme/theme_provider.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/providers/app_blocker_providers.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
+import 'package:prayer_lock/features/auth/presentation/providers/auth_providers.dart';
+import 'package:prayer_lock/features/auth/presentation/screens/auth_screen.dart';
 import 'package:prayer_lock/features/calendar/presentation/screens/islamic_calendar_screen.dart';
 import 'package:prayer_lock/features/calendar/presentation/screens/ramadan_tracker_screen.dart';
 import 'package:prayer_lock/features/dua_dhikr/presentation/screens/duadhikr_screen.dart';
@@ -21,9 +23,40 @@ import 'package:prayer_lock/features/quran/presentation/screens/quran_home_scree
 import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:prayer_lock/features/subscription/presentation/widgets/pro_paywall_sheet.dart';
 import 'package:prayer_lock/main.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Keep in sync with version in pubspec.yaml
-const String _kAppVersion = '1.0.1';
+const String _kAppVersion = '1.0.2';
+
+// Store URLs for the Share + Rate actions in MoreScreen.
+const String _kAndroidPackageId = 'com.mdnahid.prayerlock';
+const String _kPlayStoreUrl =
+    'https://play.google.com/store/apps/details?id=$_kAndroidPackageId';
+
+// TODO: replace with the numeric App Store ID once Prayer Lock ships on iOS.
+// Until set, the iOS Rate / Share actions fall back to the Play Store URL so
+// the buttons never feel broken to TestFlight users.
+const String _kIosAppStoreId = '';
+
+String get _appStoreUrl =>
+    _kIosAppStoreId.isEmpty
+        ? _kPlayStoreUrl
+        : 'https://apps.apple.com/app/id$_kIosAppStoreId';
+
+String get _appStoreReviewUrl =>
+    _kIosAppStoreId.isEmpty
+        ? _kPlayStoreUrl
+        : 'https://apps.apple.com/app/id$_kIosAppStoreId?action=write-review';
+
+// Subscription management deep-links opened from the profile sheet.
+const String _kPlayStoreSubscriptionsUrl =
+    'https://play.google.com/store/account/subscriptions?package=$_kAndroidPackageId';
+const String _kAppStoreSubscriptionsUrl =
+    'https://apps.apple.com/account/subscriptions';
+
+// Where account-deletion requests are emailed (matches privacy-policy.md).
+const String _kSupportEmail = 'thisisnahid78@gmail.com';
 
 class MainScreen extends ConsumerStatefulWidget {
   const MainScreen({super.key});
@@ -215,6 +248,37 @@ class MoreScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final uri = Uri.parse('https://sites.google.com/view/prayer-lock/home');
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Privacy Policy')),
+      );
+    }
+  }
+
+  Future<void> _shareApp() async {
+    final url = Platform.isIOS ? _appStoreUrl : _kPlayStoreUrl;
+    await Share.share(
+      'Prayer Lock — Build Discipline, Pray on Time.\nGet the app: $url',
+      subject: 'Prayer Lock',
+    );
+  }
+
+  Future<void> _rateApp(BuildContext context) async {
+    final url = Platform.isIOS ? _appStoreReviewUrl : _kPlayStoreUrl;
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open the store')));
+    }
+  }
+
   /// Opens the instructional sheet. The sheet's CTA is paywall-gated for
   /// free users and triggers the launcher pin (when supported) for Pro users.
   Future<void> _addHomeWidget(BuildContext context, WidgetRef ref) async {
@@ -238,26 +302,27 @@ class MoreScreen extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => _AddWidgetSheet(
-        manual: manual,
-        onAddTap: () async {
-          Navigator.pop(sheetCtx);
-          if (!ref.read(isProProvider)) {
-            if (!context.mounted) return;
-            await showProPaywall(
-              context,
-              ref.read(subscriptionRepositoryProvider),
-              placement: 'home_widget_locked',
-              featureTitle: 'Home Screen Widget',
-            );
-            return;
-          }
-          if (Platform.isAndroid &&
-              await HomeWidgetService.isPinWidgetSupported()) {
-            await HomeWidgetService.requestPinWidget();
-          }
-        },
-      ),
+      builder:
+          (sheetCtx) => _AddWidgetSheet(
+            manual: manual,
+            onAddTap: () async {
+              Navigator.pop(sheetCtx);
+              if (!ref.read(isProProvider)) {
+                if (!context.mounted) return;
+                await showProPaywall(
+                  context,
+                  ref.read(subscriptionRepositoryProvider),
+                  placement: 'home_widget_locked',
+                  featureTitle: 'Home Screen Widget',
+                );
+                return;
+              }
+              if (Platform.isAndroid &&
+                  await HomeWidgetService.isPinWidgetSupported()) {
+                await HomeWidgetService.requestPinWidget();
+              }
+            },
+          ),
     );
   }
 
@@ -436,9 +501,17 @@ class MoreScreen extends ConsumerWidget {
             ),
           ),
 
+          // ── Profile ───────────────────────────────────────────────────
+          const SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 20, 16, 0),
+            sliver: SliverToBoxAdapter(
+              child: _ProfileCard(),
+            ),
+          ),
+
           // ── Items ─────────────────────────────────────────────────────
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             sliver: SliverToBoxAdapter(
               child: Container(
                 decoration: BoxDecoration(
@@ -485,9 +558,8 @@ class MoreScreen extends ConsumerWidget {
                       icon: Icons.widgets_rounded,
                       color: const Color(0xFF0EA5E9),
                       title: 'Home Screen Widget',
-                      trailing: ref.watch(isProProvider)
-                          ? null
-                          : const _ProBadge(),
+                      trailing:
+                          ref.watch(isProProvider) ? null : const _ProBadge(),
                       onTap: () => _addHomeWidget(context, ref),
                     ),
                     if (Platform.isAndroid) ...[
@@ -496,9 +568,8 @@ class MoreScreen extends ConsumerWidget {
                         icon: Icons.lock_outline_rounded,
                         color: cs.primary,
                         title: 'App Blocker',
-                        trailing: ref.watch(isProProvider)
-                            ? null
-                            : const _ProBadge(),
+                        trailing:
+                            ref.watch(isProProvider) ? null : const _ProBadge(),
                         onTap: () {
                           if (ref.read(isProProvider)) {
                             Navigator.push(
@@ -665,10 +736,31 @@ class MoreScreen extends ConsumerWidget {
                     ),
                     Divider(height: 1, indent: 68, color: cs.outlineVariant),
                     _MoreRow(
+                      icon: Icons.star_outline_rounded,
+                      color: cs.secondary,
+                      title: 'Rate Prayer Lock',
+                      onTap: () => _rateApp(context),
+                    ),
+                    Divider(height: 1, indent: 68, color: cs.outlineVariant),
+                    _MoreRow(
+                      icon: Icons.share_outlined,
+                      color: const Color(0xFF0EA5E9),
+                      title: 'Share App',
+                      onTap: _shareApp,
+                    ),
+                    Divider(height: 1, indent: 68, color: cs.outlineVariant),
+                    _MoreRow(
                       icon: Icons.info_outline_rounded,
                       color: cs.onSurfaceVariant,
                       title: 'About',
                       onTap: () => _showAboutSheet(context),
+                    ),
+                    Divider(height: 1, indent: 68, color: cs.outlineVariant),
+                    _MoreRow(
+                      icon: Icons.privacy_tip_outlined,
+                      color: cs.tertiary,
+                      title: 'Privacy Policy',
+                      onTap: () => _openPrivacyPolicy(context),
                     ),
                   ],
                 ),
@@ -739,10 +831,7 @@ class _MoreRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (trailing != null) ...[
-              trailing!,
-              const SizedBox(width: 8),
-            ],
+            if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
             Icon(
               Icons.arrow_forward_ios_rounded,
               size: 14,
@@ -777,6 +866,598 @@ class _ProBadge extends StatelessWidget {
           fontWeight: FontWeight.w900,
           color: isDark ? const Color(0xFF1A1A00) : Colors.white,
           letterSpacing: 1.0,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Profile card ───────────────────────────────────────────────────────────
+//
+// Sits at the top of MoreScreen. Two states:
+//   • Signed out — CTA row that opens the auth sheet on tap.
+//   • Signed in  — avatar + name + email + Free/Pro badge (informational).
+//
+// Identity comes from `authUserProvider` (Firebase Auth). Subscription badge
+// reflects `isProProvider` (live RevenueCat). The two are linked at the uid
+// level by `RevenueCatAuthLinkService`, so the badge is accurate even right
+// after a fresh sign-in.
+
+class _ProfileCard extends ConsumerWidget {
+  const _ProfileCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final user = ref.watch(authUserProvider).valueOrNull;
+    final isPro = ref.watch(isProProvider);
+
+    final cardDecoration = BoxDecoration(
+      color: cs.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: cs.outlineVariant),
+    );
+
+    if (user == null) {
+      // ── Signed out: tap to open auth sheet ─────────────────────────────
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => showAuthSheet(context, ref.read(authRepositoryProvider)),
+          child: Container(
+            decoration: cardDecoration,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    color: cs.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Sign in or create account',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Save your Pro subscription across devices',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: cs.outlineVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── Signed in: show name + email + plan badge; tap opens profile sheet
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showProfileSheet(context),
+        child: Container(
+          decoration: cardDecoration,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              _AvatarCircle(photoUrl: user.photoUrl, initials: user.initials),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.displayNameOrEmail,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.email,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              isPro ? const _ProBadge() : const _FreeBadge(),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: cs.outlineVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showProfileSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ProfileSheet(),
+    );
+  }
+}
+
+class _AvatarCircle extends StatelessWidget {
+  const _AvatarCircle({required this.photoUrl, required this.initials});
+
+  final String? photoUrl;
+  final String initials;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final fallback = Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [cs.primary, cs.tertiary],
+        ),
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w800,
+          color: cs.onPrimary,
+        ),
+      ),
+    );
+
+    if (photoUrl == null || photoUrl!.isEmpty) return fallback;
+
+    return ClipOval(
+      child: Image.network(
+        photoUrl!,
+        width: 46,
+        height: 46,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
+    );
+  }
+}
+
+class _FreeBadge extends StatelessWidget {
+  const _FreeBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Text(
+        'FREE',
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: cs.onSurfaceVariant,
+          letterSpacing: 1.0,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Profile sheet ──────────────────────────────────────────────────────────
+//
+// Opens when the signed-in user taps their profile card. Surfaces the actions
+// they can't perform anywhere else in-app: managing their store subscription,
+// signing out, and emailing a deletion request (the deletion path matches the
+// promise in privacy-policy.md).
+
+class _ProfileSheet extends ConsumerWidget {
+  const _ProfileSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sheetBg = isDark ? const Color(0xFF0F1E2D) : cs.surface;
+    final user = ref.watch(authUserProvider).valueOrNull;
+    final isPro = ref.watch(isProProvider);
+
+    // The sheet is only opened from the signed-in card, but the auth stream
+    // could in theory emit null while the sheet is on screen (e.g. token
+    // revoked). Close in that case rather than rendering an empty header.
+    if (user == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: sheetBg,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Header (avatar + name + email + plan) ─────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  _AvatarCircle(
+                    photoUrl: user.photoUrl,
+                    initials: user.initials,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.displayNameOrEmail,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          user.email,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  isPro ? const _ProBadge() : const _FreeBadge(),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Manage account ────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Manage Account',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurfaceVariant,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? cs.surfaceContainer.withValues(alpha: 0.55)
+                      : cs.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant),
+                ),
+                child: Column(
+                  children: [
+                    _ProfileActionRow(
+                      icon: Icons.workspace_premium_rounded,
+                      iconColor: cs.secondary,
+                      title: 'Manage Subscription',
+                      subtitle: Platform.isIOS
+                          ? 'Opens your App Store subscriptions'
+                          : 'Opens your Google Play subscriptions',
+                      onTap: () => _openManageSubscription(context),
+                    ),
+                    Divider(
+                      height: 1,
+                      indent: 60,
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    _ProfileActionRow(
+                      icon: Icons.restore_rounded,
+                      iconColor: cs.tertiary,
+                      title: 'Restore Purchases',
+                      subtitle:
+                          'Re-check your Pro entitlement with the store.',
+                      onTap: () => _restorePurchases(context, ref),
+                    ),
+                    Divider(
+                      height: 1,
+                      indent: 60,
+                      color: cs.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    _ProfileActionRow(
+                      icon: Icons.logout_rounded,
+                      iconColor: cs.onSurfaceVariant,
+                      title: 'Sign Out',
+                      subtitle: 'You will need to sign back in to upgrade.',
+                      onTap: () => _signOut(context, ref),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // ── Privacy ───────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Privacy',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurfaceVariant,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? cs.surfaceContainer.withValues(alpha: 0.55)
+                      : cs.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cs.outlineVariant),
+                ),
+                child: _ProfileActionRow(
+                  icon: Icons.delete_outline_rounded,
+                  iconColor: const Color(0xFFEF4444),
+                  title: 'Delete Account',
+                  subtitle:
+                      'Email a deletion request to $_kSupportEmail.',
+                  onTap: () => _requestAccountDeletion(context, user.uid, user.email),
+                  destructive: true,
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Action handlers ────────────────────────────────────────────────────────
+
+  Future<void> _openManageSubscription(BuildContext context) async {
+    final url = Platform.isIOS
+        ? _kAppStoreSubscriptionsUrl
+        : _kPlayStoreSubscriptionsUrl;
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open subscription settings')),
+      );
+    }
+  }
+
+  Future<void> _restorePurchases(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref.read(subscriptionRepositoryProvider).restorePurchases();
+      if (!context.mounted) return;
+      navigator.maybePop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            ref.read(isProProvider)
+                ? 'Pro subscription restored.'
+                : 'No active subscription found.',
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not restore purchases')),
+      );
+    }
+  }
+
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(authRepositoryProvider).signOut();
+      if (context.mounted) navigator.maybePop();
+    } catch (_) {
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Sign out failed. Try again.')),
+      );
+    }
+  }
+
+  Future<void> _requestAccountDeletion(
+    BuildContext context,
+    String uid,
+    String email,
+  ) async {
+    final body =
+        'Hi,\n\nPlease delete my Prayer Lock account and any associated data.\n\n'
+        'Email: $email\nUser ID: $uid\n\nThank you.';
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _kSupportEmail,
+      query: 'subject=${Uri.encodeQueryComponent('Delete my Prayer Lock account')}'
+          '&body=${Uri.encodeQueryComponent(body)}',
+    );
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No mail app available — write to $_kSupportEmail',
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _ProfileActionRow extends StatelessWidget {
+  const _ProfileActionRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: destructive
+                          ? const Color(0xFFEF4444)
+                          : cs.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: cs.outlineVariant,
+            ),
+          ],
         ),
       ),
     );
@@ -1038,19 +1719,20 @@ class _AddWidgetSheet extends StatelessWidget {
     final sheetBg = isDark ? const Color(0xFF0F1E2D) : cs.surface;
     final isIos = Platform.isIOS;
 
-    final steps = isIos
-        ? const [
-            'Long-press any empty spot on your Home Screen.',
-            'Tap the ＋ button in the top-left corner.',
-            'Search for "Prayer Lock" and pick a size.',
-            'Tap Add Widget, then Done.',
-          ]
-        : const [
-            'Long-press any empty spot on your home screen.',
-            'Tap "Widgets".',
-            'Find "Prayer Lock" in the list.',
-            'Drag "Next Prayer" onto your home screen.',
-          ];
+    final steps =
+        isIos
+            ? const [
+              'Long-press any empty spot on your Home Screen.',
+              'Tap the ＋ button in the top-left corner.',
+              'Search for "Prayer Lock" and pick a size.',
+              'Tap Add Widget, then Done.',
+            ]
+            : const [
+              'Long-press any empty spot on your home screen.',
+              'Tap "Widgets".',
+              'Find "Prayer Lock" in the list.',
+              'Drag "Next Prayer" onto your home screen.',
+            ];
 
     return Container(
       decoration: BoxDecoration(
@@ -1150,10 +1832,7 @@ class _AddWidgetSheet extends StatelessWidget {
                   ),
                   child: const Text(
                     'Add to home screen',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -1200,11 +1879,7 @@ class _WidgetStepRow extends StatelessWidget {
             padding: const EdgeInsets.only(top: 2),
             child: Text(
               text,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: cs.onSurface,
-              ),
+              style: TextStyle(fontSize: 13, height: 1.4, color: cs.onSurface),
             ),
           ),
         ),
@@ -1424,3 +2099,4 @@ class _AboutInfoRow extends StatelessWidget {
     );
   }
 }
+

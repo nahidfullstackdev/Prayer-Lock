@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/subscription/domain/entities/subscription_status.dart';
 import 'package:prayer_lock/features/subscription/domain/repositories/subscription_repository.dart';
@@ -47,10 +48,22 @@ class RevenueCatService implements SubscriptionRepository {
 
   // ── Static initialiser ─────────────────────────────────────────────────────
 
-  /// Configure the RevenueCat SDK. Call once from [main] before [runApp].
+  /// Configure the RevenueCat SDK. Called from `AppInitializer.runDeferred`
+  /// after Firebase Auth has rehydrated, so [FirebaseAuth.instance.currentUser]
+  /// reflects the persisted session — we pass that uid as RevenueCat's
+  /// `appUserID` to bind the entitlement to the Firebase user from frame 0.
+  ///
+  /// In-session sign-in / sign-out is handled separately by
+  /// [RevenueCatAuthLinkService] via `Purchases.logIn` / `Purchases.logOut`.
   static Future<void> configure() async {
     final String apiKey = Platform.isIOS ? _iosApiKey : _androidApiKey;
-    await Purchases.configure(PurchasesConfiguration(apiKey));
+    final String? firebaseUid = FirebaseAuth.instance.currentUser?.uid;
+
+    final config = PurchasesConfiguration(apiKey);
+    if (firebaseUid != null && firebaseUid.isNotEmpty) {
+      config.appUserID = firebaseUid;
+    }
+    await Purchases.configure(config);
 
     // Keep status in sync for the lifetime of the app.
     Purchases.addCustomerInfoUpdateListener(_instance._onCustomerInfoUpdate);
@@ -68,7 +81,8 @@ class RevenueCatService implements SubscriptionRepository {
     }
 
     AppLogger.info(
-      'RevenueCat configured (${Platform.isIOS ? "iOS" : "Android"})',
+      'RevenueCat configured (${Platform.isIOS ? "iOS" : "Android"}) '
+      '— appUserID: ${firebaseUid ?? "anonymous"}',
     );
   }
 

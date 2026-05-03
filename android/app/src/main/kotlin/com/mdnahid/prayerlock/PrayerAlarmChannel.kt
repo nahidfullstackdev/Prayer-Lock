@@ -112,11 +112,20 @@ class PrayerAlarmChannel(
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = buildAlarmPendingIntent(id, prayerName, arabicName, adhanType, minutesBefore)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, timeMs, pi)
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeMs, pi)
-        }
+        // setAlarmClock — highest-priority alarm class, exempt from Doze deferral
+        // and App Standby bucket throttling. setExactAndAllowWhileIdle is held
+        // back after several hours of screen-off, which silently breaks Fajr
+        // (4–5:30am, 6+ hours into deep Doze). The status-bar "Next alarm"
+        // surface this exposes is a desirable side effect for prayer times.
+        val showIntent = context.packageManager
+            .getLaunchIntentForPackage(context.packageName)
+            ?.let { launch ->
+                PendingIntent.getActivity(
+                    context, id + 200, launch,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
+        alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(timeMs, showIntent), pi)
 
         val inMs = timeMs - System.currentTimeMillis()
         Log.i(TAG, "Scheduled id=$id name=$prayerName in ${inMs}ms at $timeMs")

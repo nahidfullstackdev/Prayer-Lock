@@ -60,6 +60,9 @@ class _AdhanTestWidgetState extends State<AdhanTestWidget> {
     Duration(minutes: 1),
     Duration(minutes: 2),
     Duration(minutes: 5),
+    // Crosses the Doze boundary (~1h screen-off) — only this length surfaces
+    // the Fajr-class failure mode. Pick it, lock the device, leave it aside.
+    Duration(hours: 2),
   ];
 
   // ── adhan-type resolution ───────────────────────────────────────────────────
@@ -234,8 +237,12 @@ class _AdhanTestWidgetState extends State<AdhanTestWidget> {
 
   String _formatDelay(Duration d) {
     if (d.inSeconds < 60) return '${d.inSeconds}s';
-    if (d.inSeconds % 60 == 0) return '${d.inMinutes}m';
-    return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    if (d.inMinutes < 60) {
+      if (d.inSeconds % 60 == 0) return '${d.inMinutes}m';
+      return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    }
+    if (d.inMinutes % 60 == 0) return '${d.inHours}h';
+    return '${d.inHours}h ${d.inMinutes % 60}m';
   }
 
   String _delayLabel(Duration d) =>
@@ -385,7 +392,10 @@ class _AdhanTestWidgetState extends State<AdhanTestWidget> {
             const SizedBox(height: 8),
             Text(
               'Routes through AlarmManager (Android) / zonedSchedule (iOS). '
-              'Background or kill the app after tapping to verify survival.',
+              'Background or kill the app after tapping to verify survival. '
+              'Pick 2h, lock the device, and leave it aside — that is the '
+              'only delay that crosses the Doze boundary and reproduces the '
+              'Fajr-class failure mode.',
               style: TextStyle(
                 fontSize: 11,
                 color: cs.error.withValues(alpha: 0.75),

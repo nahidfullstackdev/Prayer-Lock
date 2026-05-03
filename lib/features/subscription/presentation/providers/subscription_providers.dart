@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:prayer_lock/features/auth/presentation/providers/auth_providers.dart';
+import 'package:prayer_lock/features/subscription/data/services/revenuecat_auth_link_service.dart';
 import 'package:prayer_lock/features/subscription/data/services/revenuecat_service.dart';
 import 'package:prayer_lock/features/subscription/domain/entities/subscription_status.dart';
 import 'package:prayer_lock/features/subscription/domain/repositories/subscription_repository.dart';
@@ -8,6 +10,24 @@ import 'package:prayer_lock/features/subscription/domain/repositories/subscripti
 /// Singleton [RevenueCatService].
 final revenueCatServiceProvider = Provider<RevenueCatService>((ref) {
   final service = RevenueCatService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// Long-lived bridge that mirrors Firebase Auth state into RevenueCat by
+/// calling `Purchases.logIn(uid)` on sign-in and `Purchases.logOut()` on
+/// sign-out. Read once at app start (from `MuslimCompanionApp.build`) so the
+/// underlying stream subscription stays active for the lifetime of the
+/// [ProviderContainer].
+///
+/// See [RevenueCatAuthLinkService] for the rationale (purchase persistence
+/// across reinstalls and devices).
+final revenueCatAuthLinkServiceProvider = Provider<RevenueCatAuthLinkService>((
+  ref,
+) {
+  final service = RevenueCatAuthLinkService(
+    authRepository: ref.read(authRepositoryProvider),
+  )..start();
   ref.onDispose(service.dispose);
   return service;
 });
@@ -30,8 +50,9 @@ final subscriptionStatusProvider =
 
 /// Live stream of [SubscriptionInfo] — status + plan + product id + expiry.
 ///
-/// Use this when the consumer needs to know which plan the user is on
-/// (e.g. the Firestore subscription-record sync).
+/// Use this when the consumer needs plan metadata beyond the boolean
+/// `isProProvider` (e.g. rendering plan-specific copy in the paywall or
+/// showing the renewal date in account screens).
 final subscriptionInfoProvider = StreamProvider<SubscriptionInfo>((ref) {
   return ref.read(revenueCatServiceProvider).infoStream;
 });

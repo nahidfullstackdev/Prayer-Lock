@@ -1,9 +1,10 @@
 import 'package:prayer_lock/features/auth/domain/entities/auth_user.dart';
-import 'package:prayer_lock/features/subscription/domain/entities/subscription_status.dart';
 
 /// Domain interface for authentication.
 ///
-/// Concrete implementation: [FirebaseAuthService].
+/// Concrete implementation: [FirebaseAuthService]. Identity-only — entitlement
+/// (free / Pro) is tracked entirely by RevenueCat and linked to the Firebase
+/// uid via [RevenueCatAuthLinkService].
 abstract class AuthRepository {
   /// The currently signed-in user, or null when not authenticated.
   AuthUser? get currentUser;
@@ -30,17 +31,6 @@ abstract class AuthRepository {
 
   /// Signs out the current user from all providers.
   Future<void> signOut();
-
-  /// Persists the user's current [SubscriptionInfo] under
-  /// `users/{uid}` in Firestore. No-op when [uid] is empty.
-  ///
-  /// Stored fields: `subscriptionStatus`, `subscriptionPlan`,
-  /// `subscriptionProductId`, `subscriptionExpiresAt`, `subscriptionWillRenew`,
-  /// `subscriptionInTrial`, `subscriptionUpdatedAt`.
-  Future<void> updateSubscriptionRecord({
-    required String uid,
-    required SubscriptionInfo info,
-  });
 }
 
 /// Thrown when the user cancels Google Sign-In without selecting an account.

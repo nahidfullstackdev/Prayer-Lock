@@ -11,8 +11,8 @@ import 'package:prayer_lock/core/theme/app_theme.dart';
 import 'package:prayer_lock/core/theme/theme_provider.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/core/widgets/brand_logo.dart';
-import 'package:prayer_lock/features/auth/presentation/providers/auth_providers.dart';
 import 'package:prayer_lock/features/onboarding/presentation/providers/onboarding_provider.dart';
+import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:prayer_lock/features/onboarding/presentation/screens/onboarding_screen.dart';
 import 'package:prayer_lock/firebase_options.dart';
 import 'package:prayer_lock/main_screen.dart';
@@ -63,10 +63,11 @@ class MuslimCompanionApp extends ConsumerWidget {
     final themeMode = ref.watch(themeProvider);
     final isDark = themeMode == ThemeMode.dark;
 
-    // Activate the auth↔subscription bridge. It only listens to streams —
-    // safe to wire up before RevenueCat has finished configuring in the
-    // deferred phase; the first real CustomerInfo emission will push through.
-    ref.read(subscriptionSyncServiceProvider);
+    // Activate the Firebase Auth ↔ RevenueCat link. It only subscribes to the
+    // auth stream and calls Purchases.logIn / logOut when the uid changes —
+    // safe to wire up before RevenueCat configures (cold-start emission is
+    // covered by appUserID in PurchasesConfiguration).
+    ref.read(revenueCatAuthLinkServiceProvider);
 
     SystemChrome.setSystemUIOverlayStyle(
       isDark
@@ -85,7 +86,7 @@ class MuslimCompanionApp extends ConsumerWidget {
     );
 
     return MaterialApp(
-      title: 'Muslim Companion',
+      title: 'Prayer Lock - for muslims',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
