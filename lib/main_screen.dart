@@ -27,7 +27,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Keep in sync with version in pubspec.yaml
-const String _kAppVersion = '1.0.2';
+const String _kAppVersion = '1.0.4';
 
 // Store URLs for the Share + Rate actions in MoreScreen.
 const String _kAndroidPackageId = 'com.mdnahid.prayerlock';
@@ -504,9 +504,7 @@ class MoreScreen extends ConsumerWidget {
           // ── Profile ───────────────────────────────────────────────────
           const SliverPadding(
             padding: EdgeInsets.fromLTRB(16, 20, 16, 0),
-            sliver: SliverToBoxAdapter(
-              child: _ProfileCard(),
-            ),
+            sliver: SliverToBoxAdapter(child: _ProfileCard()),
           ),
 
           // ── Items ─────────────────────────────────────────────────────
@@ -1213,9 +1211,10 @@ class _ProfileSheet extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? cs.surfaceContainer.withValues(alpha: 0.55)
-                      : cs.surfaceContainer,
+                  color:
+                      isDark
+                          ? cs.surfaceContainer.withValues(alpha: 0.55)
+                          : cs.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: cs.outlineVariant),
                 ),
@@ -1225,9 +1224,10 @@ class _ProfileSheet extends ConsumerWidget {
                       icon: Icons.workspace_premium_rounded,
                       iconColor: cs.secondary,
                       title: 'Manage Subscription',
-                      subtitle: Platform.isIOS
-                          ? 'Opens your App Store subscriptions'
-                          : 'Opens your Google Play subscriptions',
+                      subtitle:
+                          Platform.isIOS
+                              ? 'Opens your App Store subscriptions'
+                              : 'Opens your Google Play subscriptions',
                       onTap: () => _openManageSubscription(context),
                     ),
                     Divider(
@@ -1239,8 +1239,7 @@ class _ProfileSheet extends ConsumerWidget {
                       icon: Icons.restore_rounded,
                       iconColor: cs.tertiary,
                       title: 'Restore Purchases',
-                      subtitle:
-                          'Re-check your Pro entitlement with the store.',
+                      subtitle: 'Re-check your Pro entitlement with the store.',
                       onTap: () => _restorePurchases(context, ref),
                     ),
                     Divider(
@@ -1281,9 +1280,10 @@ class _ProfileSheet extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? cs.surfaceContainer.withValues(alpha: 0.55)
-                      : cs.surfaceContainer,
+                  color:
+                      isDark
+                          ? cs.surfaceContainer.withValues(alpha: 0.55)
+                          : cs.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: cs.outlineVariant),
                 ),
@@ -1291,9 +1291,13 @@ class _ProfileSheet extends ConsumerWidget {
                   icon: Icons.delete_outline_rounded,
                   iconColor: const Color(0xFFEF4444),
                   title: 'Delete Account',
-                  subtitle:
-                      'Email a deletion request to $_kSupportEmail.',
-                  onTap: () => _requestAccountDeletion(context, user.uid, user.email),
+                  subtitle: 'Email a deletion request to $_kSupportEmail.',
+                  onTap:
+                      () => _requestAccountDeletion(
+                        context,
+                        user.uid,
+                        user.email,
+                      ),
                   destructive: true,
                 ),
               ),
@@ -1308,9 +1312,10 @@ class _ProfileSheet extends ConsumerWidget {
   // ── Action handlers ────────────────────────────────────────────────────────
 
   Future<void> _openManageSubscription(BuildContext context) async {
-    final url = Platform.isIOS
-        ? _kAppStoreSubscriptionsUrl
-        : _kPlayStoreSubscriptionsUrl;
+    final url =
+        Platform.isIOS
+            ? _kAppStoreSubscriptionsUrl
+            : _kPlayStoreSubscriptionsUrl;
     final ok = await launchUrl(
       Uri.parse(url),
       mode: LaunchMode.externalApplication,
@@ -1371,16 +1376,15 @@ class _ProfileSheet extends ConsumerWidget {
     final uri = Uri(
       scheme: 'mailto',
       path: _kSupportEmail,
-      query: 'subject=${Uri.encodeQueryComponent('Delete my Prayer Lock account')}'
+      query:
+          'subject=${Uri.encodeQueryComponent('Delete my Prayer Lock account')}'
           '&body=${Uri.encodeQueryComponent(body)}',
     );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'No mail app available — write to $_kSupportEmail',
-          ),
+          content: Text('No mail app available — write to $_kSupportEmail'),
         ),
       );
     }
@@ -1434,9 +1438,8 @@ class _ProfileActionRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: destructive
-                          ? const Color(0xFFEF4444)
-                          : cs.onSurface,
+                      color:
+                          destructive ? const Color(0xFFEF4444) : cs.onSurface,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -2099,4 +2102,3 @@ class _AboutInfoRow extends StatelessWidget {
     );
   }
 }
-

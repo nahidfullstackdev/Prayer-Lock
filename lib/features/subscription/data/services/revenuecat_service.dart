@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/subscription/domain/entities/subscription_status.dart';
 import 'package:prayer_lock/features/subscription/domain/repositories/subscription_repository.dart';
@@ -172,36 +173,80 @@ class RevenueCatService implements SubscriptionRepository {
 
   /// Fetches the current RevenueCat offering and purchases the package that
   /// matches [planId] (`'weekly'` or `'annual'`). Falls back to the first
-  /// available package if no exact match is found. Resolves silently on user
-  /// cancellation; rethrows on billing / network errors.
+  /// available package if no exact match is found.
+  ///
+  /// Returns `true` only when the `pro` entitlement is active in the resulting
+  /// `CustomerInfo`. Returns `false` when the user cancels the store dialog.
+  /// Throws when no offering / package is available, or on billing / network
+  /// errors — the caller is expected to surface a user-facing message.
+  ///
+  /// Before talking to the store, ensures RevenueCat's `appUserID` matches the
+  /// current Firebase uid. This closes the race between [Purchases.logIn]
+  /// (kicked off asynchronously by [RevenueCatAuthLinkService] when auth state
+  /// changes) and an immediate post-sign-in purchase.
   @override
-  Future<void> purchase(String planId) async {
+  Future<bool> purchase(String planId) async {
     AppLogger.info('RevenueCat purchase (plan: $planId)');
+
+    await _ensureLinkedToCurrentFirebaseUser();
+
+    final offerings = await Purchases.getOfferings();
+    final current = offerings.current;
+    if (current == null) {
+      AppLogger.warning('No current RevenueCat offering available');
+      throw const SubscriptionPurchaseException(
+        'Subscriptions are not available right now. Please try again later.',
+      );
+    }
+
+    // Refresh cached product ids opportunistically — the offering may have
+    // changed since boot.
+    _weeklyProductId = current.weekly?.storeProduct.identifier;
+    _annualProductId = current.annual?.storeProduct.identifier;
+
+    Package? package = planId == 'annual' ? current.annual : current.weekly;
+    package ??= current.availablePackages.firstOrNull;
+
+    if (package == null) {
+      AppLogger.warning('No package found for plan: $planId');
+      throw const SubscriptionPurchaseException(
+        'The selected plan is not available. Please try a different plan.',
+      );
+    }
+
     try {
-      final offerings = await Purchases.getOfferings();
-      final current = offerings.current;
-      if (current == null) {
-        AppLogger.warning('No current RevenueCat offering available');
-        return;
-      }
-
-      // Refresh cached product ids opportunistically — the offering may have
-      // changed since boot.
-      _weeklyProductId = current.weekly?.storeProduct.identifier;
-      _annualProductId = current.annual?.storeProduct.identifier;
-
-      Package? package = planId == 'annual' ? current.annual : current.weekly;
-      package ??= current.availablePackages.firstOrNull;
-
-      if (package == null) {
-        AppLogger.warning('No package found for plan: $planId');
-        return;
-      }
-
       final result = await Purchases.purchase(PurchaseParams.package(package));
       _onCustomerInfoUpdate(result.customerInfo);
-    } catch (e) {
+      return result.customerInfo.entitlements.active.containsKey(
+        _entitlementId,
+      );
+    } on PlatformException catch (e) {
+      final code = PurchasesErrorHelper.getErrorCode(e);
+      if (code == PurchasesErrorCode.purchaseCancelledError) {
+        AppLogger.info('RevenueCat purchase cancelled by user');
+        return false;
+      }
       AppLogger.error('RevenueCat purchase failed', e);
+      rethrow;
+    }
+  }
+
+  /// Ensures RevenueCat's `appUserID` is linked to the current Firebase user
+  /// before initiating a purchase. Idempotent — short-circuits when the ids
+  /// already match (the common case once [RevenueCatAuthLinkService] has
+  /// caught up). Failures are logged but not rethrown: a stale link is
+  /// preferable to blocking the purchase entirely.
+  Future<void> _ensureLinkedToCurrentFirebaseUser() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      final currentAppUserId = await Purchases.appUserID;
+      if (currentAppUserId != uid) {
+        await Purchases.logIn(uid);
+        AppLogger.info('RevenueCat: re-linked to $uid before purchase');
+      }
+    } catch (e) {
+      AppLogger.warning('Failed to verify RevenueCat link before purchase: $e');
     }
   }
 

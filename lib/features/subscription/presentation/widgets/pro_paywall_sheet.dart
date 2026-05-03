@@ -21,7 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/features/auth/presentation/providers/auth_providers.dart';
 import 'package:prayer_lock/features/auth/presentation/screens/auth_screen.dart';
 import 'package:prayer_lock/features/subscription/domain/repositories/subscription_repository.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 // ─── Public helper ────────────────────────────────────────────────────────────
 
 /// Presents the [ProPaywallSheet] as a modal bottom sheet.
@@ -42,12 +42,13 @@ Future<void> showProPaywall(
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => ProPaywallSheet(
-      featureTitle: featureTitle,
-      featureDescription: featureDescription,
-      onUpgradeTap: (planId) => repo.purchase(planId),
-      onRestoreTap: repo.restorePurchases,
-    ),
+    builder:
+        (_) => ProPaywallSheet(
+          featureTitle: featureTitle,
+          featureDescription: featureDescription,
+          onUpgradeTap: (planId) => repo.purchase(planId),
+          onRestoreTap: repo.restorePurchases,
+        ),
   );
 }
 
@@ -80,8 +81,13 @@ class ProPaywallSheet extends ConsumerStatefulWidget {
 
   /// Called when the user taps the primary CTA (after auth gate passes).
   /// Receives `'weekly'` or `'annual'` based on the selected plan card.
-  /// When [embedded] is false, the sheet closes after this Future completes.
-  final Future<void> Function(String planId) onUpgradeTap;
+  ///
+  /// Resolves to `true` when the `pro` entitlement is active afterwards
+  /// (purchase completed) and `false` when the user cancelled the store
+  /// dialog. Throws on billing / configuration errors so the sheet can
+  /// surface a snackbar. When [embedded] is false the sheet closes only on
+  /// `true`.
+  final Future<bool> Function(String planId) onUpgradeTap;
 
   /// Called when the user taps "Restore Purchases".
   final Future<void> Function() onRestoreTap;
@@ -129,9 +135,10 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
     return Container(
       decoration: BoxDecoration(
         color: sheetBg,
-        borderRadius: widget.embedded
-            ? BorderRadius.zero
-            : const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius:
+            widget.embedded
+                ? BorderRadius.zero
+                : const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
@@ -261,11 +268,7 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
                 width: 1.5,
               ),
             ),
-            child: Icon(
-              Icons.workspace_premium_rounded,
-              color: gold,
-              size: 42,
-            ),
+            child: Icon(Icons.workspace_premium_rounded, color: gold, size: 42),
           ),
           const SizedBox(height: 18),
 
@@ -337,9 +340,10 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
   // ── Features ─────────────────────────────────────────────────────────────────
 
   Widget _buildFeatures(ColorScheme cs, bool isDark) {
-    final cardBg = isDark
-        ? cs.surfaceContainer.withValues(alpha: 0.55)
-        : cs.surfaceContainer;
+    final cardBg =
+        isDark
+            ? cs.surfaceContainer.withValues(alpha: 0.55)
+            : cs.surfaceContainer;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -461,31 +465,30 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
                 backgroundColor: cs.secondary,
                 foregroundColor:
                     isDark ? const Color(0xFF1A1A00) : Colors.white,
-                disabledBackgroundColor:
-                    cs.secondary.withValues(alpha: 0.45),
+                disabledBackgroundColor: cs.secondary.withValues(alpha: 0.45),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: _isLoading
-                  ? SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: isDark
-                            ? const Color(0xFF1A1A00)
-                            : Colors.white,
+              child:
+                  _isLoading
+                      ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color:
+                              isDark ? const Color(0xFF1A1A00) : Colors.white,
+                        ),
+                      )
+                      : const Text(
+                        'Unlock Pro',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
                       ),
-                    )
-                  : const Text(
-                      'Unlock Pro',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
             ),
           ),
           const SizedBox(height: 8),
@@ -516,11 +519,30 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
           onTap: _isLoading ? null : _handleRestore,
         ),
         _FooterSeparator(cs: cs),
-        _FooterLink(label: 'Privacy', cs: cs, onTap: () {}),
-        _FooterSeparator(cs: cs),
-        _FooterLink(label: 'Terms', cs: cs, onTap: () {}),
+        _FooterLink(
+          label: 'Privacy Policy',
+          cs: cs,
+          onTap: _openPrivacyPolicy,
+        ),
       ],
     );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final uri = Uri.parse('https://sites.google.com/view/prayer-lock/home');
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Privacy Policy')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Privacy Policy')),
+      );
+    }
   }
 
   // ── Upgrade flow (auth-gated) ─────────────────────────────────────────────────
@@ -538,21 +560,35 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
     // ── Step 2: purchase ───────────────────────────────────────────────────────
     setState(() => _isLoading = true);
     try {
-      final planId =
-          _selectedPlan == _Plan.yearly ? 'annual' : 'weekly';
-      await widget.onUpgradeTap(planId);
-      // RevenueCat flow has completed (purchase or dismiss).
+      final planId = _selectedPlan == _Plan.yearly ? 'annual' : 'weekly';
+      final purchased = await widget.onUpgradeTap(planId);
       if (!mounted) return;
+
+      // User cancelled the store dialog (or entitlement still not active) —
+      // keep the paywall open silently so they can try again.
+      if (!purchased) return;
+
       if (widget.embedded) {
         widget.onPurchaseSuccess?.call();
       } else {
         Navigator.pop(context);
       }
-    } catch (_) {
-      // Purchase errors are logged inside RevenueCatService.
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyPurchaseError(e)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _friendlyPurchaseError(Object e) {
+    if (e is SubscriptionPurchaseException) return e.message;
+    return 'Something went wrong with the purchase. Please try again.';
   }
 
   Future<void> _handleRestore() async {
@@ -686,9 +722,10 @@ class _PlanCard extends StatelessWidget {
             duration: const Duration(milliseconds: 180),
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
             decoration: BoxDecoration(
-              color: selected
-                  ? gold.withValues(alpha: isDark ? 0.12 : 0.08)
-                  : cs.surfaceContainer,
+              color:
+                  selected
+                      ? gold.withValues(alpha: isDark ? 0.12 : 0.08)
+                      : cs.surfaceContainer,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: selected ? gold : cs.outlineVariant,
@@ -719,10 +756,7 @@ class _PlanCard extends StatelessWidget {
                 ),
                 Text(
                   isYearly ? 'per year' : 'per week',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: cs.onSurfaceVariant,
-                  ),
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -770,10 +804,7 @@ class _PlanCard extends StatelessWidget {
               child: Container(
                 width: 18,
                 height: 18,
-                decoration: BoxDecoration(
-                  color: gold,
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: gold, shape: BoxShape.circle),
                 child: Icon(
                   Icons.check_rounded,
                   size: 12,

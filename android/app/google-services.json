@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "623519534939-q7jki1aqsfeoirurq16bpod5ks4i5tvv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mdnahid.prayerlock",
+            "certificate_hash": "2dc522fdb8829d034ceadbf468dda1291e9bd1c0"
+          }
+        },
+        {
           "client_id": "623519534939-u4abkh27e282te9eo66g7lhcalgs85u6.apps.googleusercontent.com",
           "client_type": 3
         }

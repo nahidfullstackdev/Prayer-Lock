@@ -1,5 +1,17 @@
 import 'package:prayer_lock/features/subscription/domain/entities/subscription_status.dart';
 
+/// Thrown by [SubscriptionRepository.purchase] when the offering /
+/// package configuration prevents the purchase from starting (e.g. no
+/// current offering, no package matching the plan id). Carries a
+/// user-facing [message] the paywall can show directly.
+class SubscriptionPurchaseException implements Exception {
+  const SubscriptionPurchaseException(this.message);
+  final String message;
+
+  @override
+  String toString() => 'SubscriptionPurchaseException: $message';
+}
+
 /// Domain interface for subscription management backed by RevenueCat.
 abstract class SubscriptionRepository {
   /// The most recently known subscription status.
@@ -25,10 +37,13 @@ abstract class SubscriptionRepository {
   /// Initiates a direct purchase for the given [planId].
   ///
   /// [planId] must be `'weekly'` or `'annual'` — mapped to the matching
-  /// RevenueCat [PackageType] in the current offering. Resolves silently if
-  /// the user cancels. Throws on network / billing errors so the caller can
-  /// surface them.
-  Future<void> purchase(String planId);
+  /// RevenueCat [PackageType] in the current offering.
+  ///
+  /// Returns `true` only when the purchase completed and the `pro`
+  /// entitlement is now active. Returns `false` when the user cancels the
+  /// store dialog. Throws on network / billing / configuration errors so
+  /// the caller can surface them.
+  Future<bool> purchase(String planId);
 
   /// Attempts to restore previous purchases and updates [statusStream].
   Future<void> restorePurchases();

@@ -47,6 +47,7 @@ class DefaultFirebaseOptions {
     projectId: 'prayer-lock-fa061',
     databaseURL: 'https://prayer-lock-fa061-default-rtdb.firebaseio.com',
     storageBucket: 'prayer-lock-fa061.firebasestorage.app',
+    androidClientId: '623519534939-q7jki1aqsfeoirurq16bpod5ks4i5tvv.apps.googleusercontent.com',
     iosClientId: '623519534939-tnpngbe6g4m6cseminale37543t6h601.apps.googleusercontent.com',
     iosBundleId: 'com.mdnahid.prayerlock',
   );
