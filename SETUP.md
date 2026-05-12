@@ -119,6 +119,27 @@ Apple has required a privacy manifest for every submission since 1 May 2024. The
 2. In the right sidebar (File Inspector), under **Target Membership**, confirm **Runner** is ticked.
 3. Confirm the file appears in **Build Phases** -> **Copy Bundle Resources**.
 
+### 5d. Commit the generated iOS artifacts
+
+After the first Mac run the following files are created or modified and SHOULD be committed so future contributors do not have to regenerate them:
+
+- `ios/Podfile.lock` — created by `pod install`
+- `ios/Runner/adhan.caf` — created by `afconvert`
+- `ios/Runner/adhan_fajr.caf` — created by `afconvert`
+- `ios/Runner.xcodeproj/project.pbxproj` — modified by Xcode when the `.caf` and `PrivacyInfo.xcprivacy` files are added to the Runner target
+
+None of these are gitignored. A single follow-up commit on the Mac locks them in for every future contributor — running `pod install` on another Mac will then reproduce the exact same Pod versions, and `afconvert` does not need to be re-run.
+
+```bash
+git add ios/Podfile.lock \
+        ios/Runner/adhan.caf \
+        ios/Runner/adhan_fajr.caf \
+        ios/Runner.xcodeproj/project.pbxproj
+git commit -m "ios: bundle Podfile.lock and CAF notification sounds"
+```
+
+Confirm `git status` is otherwise clean — nothing under `Pods/`, `Flutter/ephemeral/`, or `xcuserdata/` should appear (those are correctly ignored).
+
 ---
 
 ## 6. Signing & Capabilities
