@@ -7,6 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/home_widget/data/services/home_widget_service.dart';
 import 'package:prayer_lock/features/prayer_times/data/datasources/prayer_times_local_data_source.dart';
+import 'package:prayer_lock/features/prayer_times/data/services/adhan_audio_service.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/notification_service.dart';
 import 'package:prayer_lock/features/subscription/data/services/revenuecat_service.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
@@ -50,6 +51,7 @@ abstract final class AppInitializer {
       _guard('alarm-manager', _initAlarmManager),
       _guard('timezone', _initTimezone),
       _guard('notifications', _initNotifications),
+      _guard('adhan-audio', AdhanAudioService().initialize),
       _guard('revenuecat', RevenueCatService.configure),
       _guard('home-widget', HomeWidgetService.initialize),
     ]);

@@ -21,6 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/features/auth/presentation/providers/auth_providers.dart';
 import 'package:prayer_lock/features/auth/presentation/screens/auth_screen.dart';
 import 'package:prayer_lock/features/subscription/domain/repositories/subscription_repository.dart';
+import 'package:prayer_lock/features/subscription/presentation/providers/subscription_providers.dart';
 import 'package:url_launcher/url_launcher.dart';
 // ─── Public helper ────────────────────────────────────────────────────────────
 
@@ -452,6 +453,14 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
   // ── CTA ──────────────────────────────────────────────────────────────────────
 
   Widget _buildCTA(ColorScheme cs, bool isDark) {
+    // RevenueCat configure() runs in deferred init. If it failed (e.g. wrong
+    // API key, network blocked at boot), gate the upgrade button so the user
+    // gets a clear message instead of a generic post-tap failure.
+    final readyAsync = ref.watch(revenueCatReadyProvider);
+    final isUnavailable = readyAsync.maybeWhen(
+      data: (ok) => !ok,
+      orElse: () => false,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -460,7 +469,8 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
             width: double.infinity,
             height: 54,
             child: FilledButton(
-              onPressed: _isLoading ? null : _handleUpgrade,
+              onPressed:
+                  (_isLoading || isUnavailable) ? null : _handleUpgrade,
               style: FilledButton.styleFrom(
                 backgroundColor: cs.secondary,
                 foregroundColor:
@@ -495,7 +505,9 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
           // TODO: replace static prices with RevenueCat product priceStrings
           //       via Purchases.getOfferings() when products are configured.
           Text(
-            _billingNote(),
+            isUnavailable
+                ? 'Subscriptions are temporarily unavailable. Please try again later.'
+                : _billingNote(),
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 11,
@@ -553,8 +565,18 @@ class _ProPaywallSheetState extends ConsumerState<ProPaywallSheet> {
     if (!isSignedIn) {
       final repo = ref.read(authRepositoryProvider);
       final signedIn = await showAuthSheet(context, repo);
-      // User cancelled auth — stay on paywall.
-      if (!signedIn || !mounted) return;
+      if (!mounted) return;
+      // User cancelled or sign-in failed — surface a hint instead of bailing
+      // silently, so the missing step is obvious.
+      if (!signedIn) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sign in to continue with your purchase.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
     }
 
     // ── Step 2: purchase ───────────────────────────────────────────────────────

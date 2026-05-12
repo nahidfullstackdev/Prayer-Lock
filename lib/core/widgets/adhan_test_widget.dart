@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
+import 'package:prayer_lock/features/app_blocker/data/datasources/app_blocker_native_data_source.dart';
+import 'package:prayer_lock/features/app_blocker/domain/entities/blocker_window.dart';
 import 'package:prayer_lock/features/prayer_times/data/services/native_alarm_service.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/adhan_type.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.dart';
@@ -25,6 +27,11 @@ const int _kAdhanTypeSilent = 2;
 // Also outside the boot receiver's PRAYER_COUNT loop, so a stale prefs entry
 // is a no-op even if the user kills the app between scheduling and firing.
 const int _kTestAlarmId = 99;
+
+// Window length used when arming the App Blocker alongside a test adhan.
+// Short enough to verify behaviour quickly without waiting through the
+// production 20-minute window.
+const int _kTestBlockerWindowMinutes = 5;
 
 /// Debug-only widget for smoke-testing the prayer notification pipeline.
 ///
@@ -52,6 +59,11 @@ class _AdhanTestWidgetState extends State<AdhanTestWidget> {
   // out-of-the-box smoke test, not the immediate `show()` shortcut.
   Duration _selectedDelay = const Duration(seconds: 30);
   bool _isWorking = false;
+  // Android-only: when true, the test also schedules a BlockerWindow
+  // matching the adhan time so the Accessibility Service arms in lockstep.
+  bool _armBlockerWindow = false;
+
+  final _blockerNative = AppBlockerNativeDataSource();
 
   static const List<Duration> _delayOptions = <Duration>[
     Duration.zero,
@@ -91,12 +103,38 @@ class _AdhanTestWidgetState extends State<AdhanTestWidget> {
       } else {
         await _scheduleDelayed();
       }
+      if (Platform.isAndroid && _armBlockerWindow) {
+        await _armBlockerForTest();
+      }
     } catch (e, st) {
       AppLogger.error('AdhanTestWidget._fire failed', e, st);
       _toast('Failed: $e');
     } finally {
       if (mounted) setState(() => _isWorking = false);
     }
+  }
+
+  /// Schedules a single [BlockerWindow] aligned with the test adhan so the
+  /// Accessibility Service arms exactly when the notification fires.
+  ///
+  /// Replaces every currently-scheduled window — that includes today's real
+  /// prayer windows. Surfaced in the UI hint below the toggle.
+  Future<void> _armBlockerForTest() async {
+    final startMs = DateTime.now()
+        .add(_selectedDelay)
+        .millisecondsSinceEpoch;
+    final endMs = startMs + (_kTestBlockerWindowMinutes * 60 * 1000);
+    await _blockerNative.scheduleBlockerWindows([
+      BlockerWindow(
+        prayerId: _selectedPrayer.index,
+        startMs: startMs,
+        endMs: endMs,
+      ),
+    ]);
+    AppLogger.info(
+      '[AdhanTest] Armed blocker window prayer=${_selectedPrayer.displayName} '
+      'start=$startMs end=$endMs (${_kTestBlockerWindowMinutes}m)',
+    );
   }
 
   /// Posts the notification immediately via the plugin. Bypasses AlarmManager
@@ -221,6 +259,9 @@ class _AdhanTestWidgetState extends State<AdhanTestWidget> {
     try {
       if (Platform.isAndroid) {
         await NativeAlarmService.cancelPrayerAlarm(_kTestAlarmId);
+        if (_armBlockerWindow) {
+          await _blockerNative.cancelAllBlockerWindows();
+        }
       } else {
         await FlutterLocalNotificationsPlugin().cancel(_kTestAlarmId);
       }
@@ -341,6 +382,66 @@ class _AdhanTestWidgetState extends State<AdhanTestWidget> {
               );
             }).toList(),
           ),
+
+          // ── App Blocker arm toggle (Android only) ───────────────────────────
+          if (Platform.isAndroid) ...[
+            const SizedBox(height: 14),
+            _SectionLabel('App Blocker', cs: cs),
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: _isWorking
+                  ? null
+                  : () => setState(
+                        () => _armBlockerWindow = !_armBlockerWindow,
+                      ),
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 36,
+                      height: 22,
+                      child: Switch(
+                        value: _armBlockerWindow,
+                        onChanged: _isWorking
+                            ? null
+                            : (v) => setState(() => _armBlockerWindow = v),
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Also arm App Blocker for a '
+                        '$_kTestBlockerWindowMinutes-minute window',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: cs.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_armBlockerWindow) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Requires: Accessibility Service enabled, Overlay permission '
+                'granted, at least one app selected, auto-blocking ON. '
+                'Replaces today’s real blocker schedule — re-toggle '
+                'auto-blocking in App Blocker settings to restore.',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  color: cs.error.withValues(alpha: 0.75),
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ],
 
           const SizedBox(height: 14),
 

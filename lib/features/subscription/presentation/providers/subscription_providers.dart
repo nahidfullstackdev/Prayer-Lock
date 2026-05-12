@@ -68,3 +68,14 @@ final isProProvider = Provider<bool>((ref) {
         orElse: () => false,
       );
 });
+
+/// Resolves once `RevenueCatService.configure()` completes — true on success,
+/// false on failure (caught by `AppInitializer._guard`). Loading state means
+/// configure is still running in deferred init.
+///
+/// The paywall watches this so the upgrade button can be disabled with a clear
+/// message if subscriptions are unavailable, instead of failing opaquely after
+/// the user taps it.
+final revenueCatReadyProvider = FutureProvider<bool>((ref) {
+  return RevenueCatService.configReady;
+});

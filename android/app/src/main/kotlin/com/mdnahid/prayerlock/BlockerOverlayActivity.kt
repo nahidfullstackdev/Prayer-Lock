@@ -1,6 +1,7 @@
 package com.mdnahid.prayerlock
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -198,8 +199,19 @@ class BlockerOverlayActivity : Activity() {
 
     // ── Actions ──────────────────────────────────────────────────────────────
 
+    /**
+     * User confirmed they prayed — clear `window_active` so the Accessibility
+     * Service stops re-launching this overlay for the rest of the current
+     * prayer window. The master switch (`auto_enabled`) stays on, so the
+     * next adhan's start alarm will re-arm blocking.
+     */
     private fun unblockAndFinish() {
-        stopService(Intent(this, AppBlockerService::class.java))
+        getSharedPreferences(
+            PrayerLockAccessibilityService.PREFS_FILE,
+            Context.MODE_PRIVATE,
+        ).edit()
+            .putBoolean(PrayerLockAccessibilityService.PREFS_KEY_WINDOW_ACTIVE, false)
+            .apply()
         finish()
     }
 

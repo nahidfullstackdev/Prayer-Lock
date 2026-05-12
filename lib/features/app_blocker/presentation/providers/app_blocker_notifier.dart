@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
+import 'package:prayer_lock/features/app_blocker/data/services/blocker_scheduler.dart';
 import 'package:prayer_lock/features/app_blocker/domain/entities/blocked_app.dart';
 import 'package:prayer_lock/features/app_blocker/domain/repositories/app_blocker_repository.dart';
 import 'package:prayer_lock/features/app_blocker/domain/usecases/get_blocked_packages.dart';
 import 'package:prayer_lock/features/app_blocker/domain/usecases/get_installed_apps.dart';
 import 'package:prayer_lock/features/app_blocker/domain/usecases/save_blocked_packages.dart';
-import 'package:prayer_lock/features/app_blocker/domain/usecases/start_blocker_service.dart';
-import 'package:prayer_lock/features/app_blocker/domain/usecases/stop_blocker_service.dart';
+import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_times.dart';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -16,8 +16,8 @@ class AppBlockerState {
   const AppBlockerState({
     this.installedApps = const [],
     this.blockedPackages = const {},
-    this.isServiceRunning = false,
-    this.hasUsageStatsPermission = false,
+    this.isAutoBlockingEnabled = false,
+    this.hasAccessibilityPermission = false,
     this.hasOverlayPermission = false,
     this.isLoadingApps = false,
     this.isTogglingService = false,
@@ -26,21 +26,25 @@ class AppBlockerState {
 
   final List<BlockedApp> installedApps;
   final Set<String> blockedPackages;
-  final bool isServiceRunning;
-  final bool hasUsageStatsPermission;
+
+  /// Master switch — when true, the Accessibility Service is armed during
+  /// scheduled prayer windows.
+  final bool isAutoBlockingEnabled;
+
+  final bool hasAccessibilityPermission;
   final bool hasOverlayPermission;
   final bool isLoadingApps;
   final bool isTogglingService;
   final String? errorMessage;
 
   bool get hasAllPermissions =>
-      hasUsageStatsPermission && hasOverlayPermission;
+      hasAccessibilityPermission && hasOverlayPermission;
 
   AppBlockerState copyWith({
     List<BlockedApp>? installedApps,
     Set<String>? blockedPackages,
-    bool? isServiceRunning,
-    bool? hasUsageStatsPermission,
+    bool? isAutoBlockingEnabled,
+    bool? hasAccessibilityPermission,
     bool? hasOverlayPermission,
     bool? isLoadingApps,
     bool? isTogglingService,
@@ -49,9 +53,10 @@ class AppBlockerState {
     return AppBlockerState(
       installedApps: installedApps ?? this.installedApps,
       blockedPackages: blockedPackages ?? this.blockedPackages,
-      isServiceRunning: isServiceRunning ?? this.isServiceRunning,
-      hasUsageStatsPermission:
-          hasUsageStatsPermission ?? this.hasUsageStatsPermission,
+      isAutoBlockingEnabled:
+          isAutoBlockingEnabled ?? this.isAutoBlockingEnabled,
+      hasAccessibilityPermission:
+          hasAccessibilityPermission ?? this.hasAccessibilityPermission,
       hasOverlayPermission: hasOverlayPermission ?? this.hasOverlayPermission,
       isLoadingApps: isLoadingApps ?? this.isLoadingApps,
       isTogglingService: isTogglingService ?? this.isTogglingService,
@@ -67,17 +72,15 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
     required this.getInstalledAppsUseCase,
     required this.getBlockedPackagesUseCase,
     required this.saveBlockedPackagesUseCase,
-    required this.startBlockerServiceUseCase,
-    required this.stopBlockerServiceUseCase,
     required this.repository,
+    required this.scheduler,
   }) : super(const AppBlockerState());
 
   final GetInstalledAppsUseCase getInstalledAppsUseCase;
   final GetBlockedPackagesUseCase getBlockedPackagesUseCase;
   final SaveBlockedPackagesUseCase saveBlockedPackagesUseCase;
-  final StartBlockerServiceUseCase startBlockerServiceUseCase;
-  final StopBlockerServiceUseCase stopBlockerServiceUseCase;
   final AppBlockerRepository repository;
+  final BlockerScheduler scheduler;
 
   Timer? _debounceTimer;
 
@@ -94,7 +97,7 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
     cached.fold(
       (_) {},
       (perms) => state = state.copyWith(
-        hasUsageStatsPermission: perms.hasUsageStats,
+        hasAccessibilityPermission: perms.hasAccessibility,
         hasOverlayPermission: perms.hasOverlay,
       ),
     );
@@ -103,9 +106,9 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
     final packagesResult = await getBlockedPackagesUseCase();
     final packages = packagesResult.fold((_) => <String>[], (l) => l);
 
-    // Authoritative: verify permissions + service state from native side
-    // and persist the result back to Hive.
-    await _updatePermissionsAndServiceState(packages.toSet());
+    // Authoritative: verify permissions + auto-blocking state from native side
+    // and persist back to Hive.
+    await _refreshFromNative(packages.toSet());
 
     // Slow: fetch installed apps from native side
     state = state.copyWith(isLoadingApps: true, errorMessage: null);
@@ -127,37 +130,35 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
 
   /// Re-checks permissions only — called when returning from Android Settings.
   Future<void> refreshPermissions() async {
-    await _updatePermissionsAndServiceState(state.blockedPackages);
+    await _refreshFromNative(state.blockedPackages);
   }
 
-  Future<void> _updatePermissionsAndServiceState(Set<String> packages) async {
-    final usageResult = await repository.hasUsageStatsPermission();
+  Future<void> _refreshFromNative(Set<String> packages) async {
+    final accessibilityResult = await repository.hasAccessibilityPermission();
     final overlayResult = await repository.hasOverlayPermission();
-    final serviceResult = await repository.isBlockerServiceRunning();
 
-    final hasUsage = usageResult.fold((_) => false, (v) => v);
+    final hasAccessibility = accessibilityResult.fold((_) => false, (v) => v);
     final hasOverlay = overlayResult.fold((_) => false, (v) => v);
+    final autoEnabled = repository.getAutoBlockingEnabled();
 
     state = state.copyWith(
       blockedPackages: packages,
-      hasUsageStatsPermission: hasUsage,
+      hasAccessibilityPermission: hasAccessibility,
       hasOverlayPermission: hasOverlay,
-      isServiceRunning: serviceResult.fold((_) => false, (v) => v),
+      isAutoBlockingEnabled: autoEnabled,
       errorMessage: null,
     );
 
-    // Persist the verified permission state to Hive so the next launch
-    // can show the correct UI instantly before native checks complete.
     await repository.savePermissions(
-      hasUsageStats: hasUsage,
+      hasAccessibility: hasAccessibility,
       hasOverlay: hasOverlay,
     );
   }
 
   // ── App selection ────────────────────────────────────────────────────────
 
-  /// Toggles a single app's blocked status. Auto-saves to SharedPreferences
-  /// and restarts the service (if running) after a 500 ms debounce.
+  /// Toggles a single app's blocked status. Auto-saves to Hive and pushes
+  /// the updated set to the Accessibility Service after a 500ms debounce.
   void toggleApp(String packageName) {
     final updated = Set<String>.from(state.blockedPackages);
     if (updated.contains(packageName)) {
@@ -169,29 +170,30 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
 
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-      _persistAndApply(updated);
+      _persistAndPush(updated);
     });
   }
 
-  Future<void> _persistAndApply(Set<String> packages) async {
+  Future<void> _persistAndPush(Set<String> packages) async {
     await saveBlockedPackagesUseCase(packages.toList());
-
-    if (state.isServiceRunning) {
-      // Restart service so it picks up the updated package list immediately.
-      await repository.stopBlockerService();
-      if (packages.isNotEmpty) {
-        await repository.startBlockerService(packages.toList());
-      } else {
-        state = state.copyWith(isServiceRunning: false);
-      }
-    }
+    await repository.pushBlockedPackagesToNative(packages.toList());
   }
 
-  // ── Service toggle ───────────────────────────────────────────────────────
+  // ── Auto-blocking master switch ──────────────────────────────────────────
 
-  Future<void> toggleService({required bool enable}) async {
+  /// Enables or disables auto-blocking during prayer windows. On enable:
+  /// validates permissions + non-empty selection, pushes state to native,
+  /// then schedules today's window alarms (if [prayerTimes] is supplied).
+  ///
+  /// [prayerTimes] is optional — if null, the master switch is still flipped
+  /// on, and the listener on `prayerTimesProvider` will schedule windows
+  /// once prayer times finish loading.
+  Future<void> toggleAutoBlocking({
+    required bool enable,
+    PrayerTimes? prayerTimes,
+  }) async {
     if (enable) {
-      if (!state.hasUsageStatsPermission || !state.hasOverlayPermission) {
+      if (!state.hasAccessibilityPermission || !state.hasOverlayPermission) {
         state = state.copyWith(
           errorMessage: 'Grant both permissions before enabling the blocker.',
         );
@@ -205,25 +207,42 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
       }
 
       state = state.copyWith(isTogglingService: true, errorMessage: null);
-      final result = await startBlockerServiceUseCase(
+
+      final setResult = await repository.setAutoBlockingEnabled(true);
+      final pushResult = await repository.pushBlockedPackagesToNative(
         state.blockedPackages.toList(),
       );
-      result.fold(
-        (failure) => state = state.copyWith(
+
+      final firstFailure = setResult.fold((f) => f, (_) => null) ??
+          pushResult.fold((f) => f, (_) => null);
+      if (firstFailure != null) {
+        state = state.copyWith(
           isTogglingService: false,
-          errorMessage: failure.message,
-        ),
-        (_) => state = state.copyWith(
-          isTogglingService: false,
-          isServiceRunning: true,
-        ),
+          errorMessage: firstFailure.message,
+        );
+        return;
+      }
+
+      if (prayerTimes != null) {
+        await scheduler.rescheduleForToday(prayerTimes);
+      } else {
+        AppLogger.warning(
+          'Auto-blocking enabled before prayer times loaded — '
+          'scheduling will run on next prayer-times load',
+        );
+      }
+
+      state = state.copyWith(
+        isTogglingService: false,
+        isAutoBlockingEnabled: true,
       );
     } else {
       state = state.copyWith(isTogglingService: true);
-      await stopBlockerServiceUseCase();
+      await repository.setAutoBlockingEnabled(false);
+      await scheduler.cancelAll();
       state = state.copyWith(
         isTogglingService: false,
-        isServiceRunning: false,
+        isAutoBlockingEnabled: false,
         errorMessage: null,
       );
     }
@@ -231,8 +250,8 @@ class AppBlockerNotifier extends StateNotifier<AppBlockerState> {
 
   // ── Permission navigation ────────────────────────────────────────────────
 
-  Future<void> openUsageStatsSettings() =>
-      repository.openUsageStatsSettings();
+  Future<void> openAccessibilitySettings() =>
+      repository.openAccessibilitySettings();
 
   Future<void> openOverlaySettings() => repository.openOverlaySettings();
 

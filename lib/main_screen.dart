@@ -27,27 +27,35 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Keep in sync with version in pubspec.yaml
-const String _kAppVersion = '1.0.4';
+const String _kAppVersion = '1.0.6';
 
 // Store URLs for the Share + Rate actions in MoreScreen.
 const String _kAndroidPackageId = 'com.mdnahid.prayerlock';
 const String _kPlayStoreUrl =
     'https://play.google.com/store/apps/details?id=$_kAndroidPackageId';
 
-// TODO: replace with the numeric App Store ID once Prayer Lock ships on iOS.
-// Until set, the iOS Rate / Share actions fall back to the Play Store URL so
-// the buttons never feel broken to TestFlight users.
-const String _kIosAppStoreId = '';
+// Set via `--dart-define=IOS_APP_STORE_ID=<id>` once the App Store record
+// exists. Leaving it empty during pre-launch keeps the Rate / Share buttons
+// inert on iOS instead of sending users to a Play Store link they can't open.
+const String _kIosAppStoreId = String.fromEnvironment('IOS_APP_STORE_ID');
 
-String get _appStoreUrl =>
-    _kIosAppStoreId.isEmpty
-        ? _kPlayStoreUrl
+String? get _appStoreUrl {
+  if (Platform.isIOS) {
+    return _kIosAppStoreId.isEmpty
+        ? null
         : 'https://apps.apple.com/app/id$_kIosAppStoreId';
+  }
+  return _kPlayStoreUrl;
+}
 
-String get _appStoreReviewUrl =>
-    _kIosAppStoreId.isEmpty
-        ? _kPlayStoreUrl
+String? get _appStoreReviewUrl {
+  if (Platform.isIOS) {
+    return _kIosAppStoreId.isEmpty
+        ? null
         : 'https://apps.apple.com/app/id$_kIosAppStoreId?action=write-review';
+  }
+  return _kPlayStoreUrl;
+}
 
 // Subscription management deep-links opened from the profile sheet.
 const String _kPlayStoreSubscriptionsUrl =
@@ -84,6 +92,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Eager-read the side-effect provider so its `ref.listen` on
+    // prayerTimesProvider is active for the rest of the session, keeping
+    // App Blocker windows in sync with day rollover / location changes.
+    ref.read(blockerAutoSchedulerProvider);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _bootstrapPermissions(),
     );
@@ -122,7 +134,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   Future<void> _checkAndMaybeShowSpecialPermsSheet() async {
     if (!mounted) return;
     final repo = ref.read(appBlockerRepositoryProvider);
-    final hasUsage = (await repo.hasUsageStatsPermission()).fold(
+    final hasAccessibility = (await repo.hasAccessibilityPermission()).fold(
       (_) => false,
       (v) => v,
     );
@@ -130,7 +142,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
       (_) => false,
       (v) => v,
     );
-    if (hasUsage && hasOverlay) return;
+    if (hasAccessibility && hasOverlay) return;
     if (!mounted) return;
 
     await showModalBottomSheet<void>(
@@ -139,12 +151,12 @@ class _MainScreenState extends ConsumerState<MainScreen>
       backgroundColor: Colors.transparent,
       builder:
           (sheetCtx) => _SpecialPermissionsSheet(
-            hasUsageStats: hasUsage,
+            hasAccessibility: hasAccessibility,
             hasOverlay: hasOverlay,
-            onGrantUsage: () {
+            onGrantAccessibility: () {
               _openedSpecialSettings = true;
               Navigator.pop(sheetCtx);
-              repo.openUsageStatsSettings();
+              repo.openAccessibilitySettings();
             },
             onGrantOverlay: () {
               _openedSpecialSettings = true;
@@ -258,8 +270,16 @@ class MoreScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _shareApp() async {
-    final url = Platform.isIOS ? _appStoreUrl : _kPlayStoreUrl;
+  Future<void> _shareApp(BuildContext context) async {
+    final url = _appStoreUrl;
+    if (url == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sharing will be available after launch')),
+        );
+      }
+      return;
+    }
     await Share.share(
       'Prayer Lock — Build Discipline, Pray on Time.\nGet the app: $url',
       subject: 'Prayer Lock',
@@ -267,7 +287,15 @@ class MoreScreen extends ConsumerWidget {
   }
 
   Future<void> _rateApp(BuildContext context) async {
-    final url = Platform.isIOS ? _appStoreReviewUrl : _kPlayStoreUrl;
+    final url = _appStoreReviewUrl;
+    if (url == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rating will be available after launch')),
+        );
+      }
+      return;
+    }
     final ok = await launchUrl(
       Uri.parse(url),
       mode: LaunchMode.externalApplication,
@@ -551,43 +579,59 @@ class MoreScreen extends ConsumerWidget {
                             ),
                           ),
                     ),
-                    Divider(height: 1, indent: 68, color: cs.outlineVariant),
-                    _MoreRow(
-                      icon: Icons.widgets_rounded,
-                      color: const Color(0xFF0EA5E9),
-                      title: 'Home Screen Widget',
-                      trailing:
-                          ref.watch(isProProvider) ? null : const _ProBadge(),
-                      onTap: () => _addHomeWidget(context, ref),
-                    ),
+                    // Home Screen Widget is Android-only for now — the iOS
+                    // WidgetKit extension is deferred (see SETUP.md). Hiding
+                    // the row on iOS avoids a dead CTA that silently no-ops.
                     if (Platform.isAndroid) ...[
                       Divider(height: 1, indent: 68, color: cs.outlineVariant),
+                      _MoreRow(
+                        icon: Icons.widgets_rounded,
+                        color: const Color(0xFF0EA5E9),
+                        title: 'Home Screen Widget',
+                        trailing:
+                            ref.watch(isProProvider) ? null : const _ProBadge(),
+                        onTap: () => _addHomeWidget(context, ref),
+                      ),
+                      Divider(height: 1, indent: 68, color: cs.outlineVariant),
+                      // TEMP: Pro gate disabled for testing — restore block below to re-enable.
                       _MoreRow(
                         icon: Icons.lock_outline_rounded,
                         color: cs.primary,
                         title: 'App Blocker',
-                        trailing:
-                            ref.watch(isProProvider) ? null : const _ProBadge(),
-                        onTap: () {
-                          if (ref.read(isProProvider)) {
-                            Navigator.push(
+                        onTap:
+                            () => Navigator.push(
                               context,
                               MaterialPageRoute<void>(
                                 builder: (_) => const AppBlockerScreen(),
                               ),
-                            );
-                          } else {
-                            showProPaywall(
-                              context,
-                              ref.read(subscriptionRepositoryProvider),
-                              placement: 'app_blocker_locked',
-                              featureTitle: 'App Blocker',
-                              featureDescription:
-                                  'Block distracting apps during every Salah window.',
-                            );
-                          }
-                        },
+                            ),
                       ),
+                      // _MoreRow(
+                      //   icon: Icons.lock_outline_rounded,
+                      //   color: cs.primary,
+                      //   title: 'App Blocker',
+                      //   trailing:
+                      //       ref.watch(isProProvider) ? null : const _ProBadge(),
+                      //   onTap: () {
+                      //     if (ref.read(isProProvider)) {
+                      //       Navigator.push(
+                      //         context,
+                      //         MaterialPageRoute<void>(
+                      //           builder: (_) => const AppBlockerScreen(),
+                      //         ),
+                      //       );
+                      //     } else {
+                      //       showProPaywall(
+                      //         context,
+                      //         ref.read(subscriptionRepositoryProvider),
+                      //         placement: 'app_blocker_locked',
+                      //         featureTitle: 'App Blocker',
+                      //         featureDescription:
+                      //             'Block distracting apps during every Salah window.',
+                      //       );
+                      //     }
+                      //   },
+                      // ),
                     ],
                   ],
                 ),
@@ -744,7 +788,7 @@ class MoreScreen extends ConsumerWidget {
                       icon: Icons.share_outlined,
                       color: const Color(0xFF0EA5E9),
                       title: 'Share App',
-                      onTap: _shareApp,
+                      onTap: () => _shareApp(context),
                     ),
                     Divider(height: 1, indent: 68, color: cs.outlineVariant),
                     _MoreRow(
@@ -1476,15 +1520,15 @@ class _ProfileActionRow extends StatelessWidget {
 
 class _SpecialPermissionsSheet extends StatelessWidget {
   const _SpecialPermissionsSheet({
-    required this.hasUsageStats,
+    required this.hasAccessibility,
     required this.hasOverlay,
-    required this.onGrantUsage,
+    required this.onGrantAccessibility,
     required this.onGrantOverlay,
   });
 
-  final bool hasUsageStats;
+  final bool hasAccessibility;
   final bool hasOverlay;
-  final VoidCallback onGrantUsage;
+  final VoidCallback onGrantAccessibility;
   final VoidCallback onGrantOverlay;
 
   @override
@@ -1580,14 +1624,14 @@ class _SpecialPermissionsSheet extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    if (!hasUsageStats) ...[
+                    if (!hasAccessibility) ...[
                       _PermRow(
-                        icon: Icons.query_stats_rounded,
-                        title: 'Usage Access',
+                        icon: Icons.accessibility_new_rounded,
+                        title: 'Accessibility Service',
                         subtitle:
-                            'Detects which app is in the foreground so Prayer Lock can block it during Salah.',
+                            'Detects which app is in the foreground during prayer windows. Prayer Lock never reads or transmits screen content.',
                         cs: cs,
-                        onGrant: onGrantUsage,
+                        onGrant: onGrantAccessibility,
                       ),
                       if (!hasOverlay)
                         Divider(

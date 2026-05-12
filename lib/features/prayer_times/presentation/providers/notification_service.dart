@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
+import 'package:prayer_lock/features/prayer_times/data/services/adhan_audio_service.dart';
 import 'package:prayer_lock/features/prayer_times/data/services/native_alarm_service.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/adhan_type.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.dart';
@@ -10,6 +12,29 @@ import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_setting
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_times.dart';
 import 'package:prayer_lock/features/prayer_times/domain/repositories/notification_repository.dart';
 import 'package:timezone/timezone.dart' as tz;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Top-level notification-tap handler.
+//
+// flutter_local_notifications may invoke this from a cold start when the user
+// taps a notification while the app is killed, so the handler routes through
+// the [AdhanAudioService] singleton instead of capturing any closure state.
+// ─────────────────────────────────────────────────────────────────────────────
+@pragma('vm:entry-point')
+void _onNotificationTap(NotificationResponse response) {
+  final payload = response.payload;
+  if (payload == null || !payload.startsWith('prayer:')) return;
+  final index = int.tryParse(payload.substring('prayer:'.length));
+  if (index == null || index < 0 || index >= PrayerName.values.length) return;
+  final prayer = PrayerName.values[index];
+  final audio = AdhanAudioService();
+  if (audio.isPlaying) {
+    AppLogger.debug('Notification tap ignored — Adhan already playing');
+    return;
+  }
+  AppLogger.info('Notification tap → resuming full Adhan for ${prayer.displayName}');
+  audio.playAdhan(isFajr: prayer == PrayerName.fajr);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notification channel IDs
@@ -49,6 +74,11 @@ class NotificationService implements NotificationRepository {
 
   bool _initialised = false;
 
+  // iOS only: Dart Timers that drive AdhanAudioService at prayer time while
+  // the app is alive (foreground or background). Android plays the full
+  // Adhan via the native notification channel sound and needs no Timer.
+  final List<Timer> _iosAdhanTimers = <Timer>[];
+
   // ── initialise ──────────────────────────────────────────────────────────────
 
   @override
@@ -65,7 +95,10 @@ class NotificationService implements NotificationRepository {
           requestSoundPermission: false,
         ),
       );
-      await _notifications.initialize(initSettings);
+      await _notifications.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: _onNotificationTap,
+      );
       if (Platform.isAndroid) {
         await _createNotificationChannels();
       }
@@ -181,6 +214,14 @@ class NotificationService implements NotificationRepository {
       final int adhanType = _resolveAdhanType(settings.adhanType, prayer.name);
 
       if (Platform.isIOS) {
+        // iOS notification sounds are hard-capped at ~30s by the system and
+        // can only play files bundled as `.caf` in the iOS app (Flutter assets
+        // aren't visible to UNUserNotificationCenter). The Dart Timer below
+        // plays the full `.mp3` via AdhanAudioService at the real prayer time —
+        // but only when the app is foreground/active, since iOS suspends Dart
+        // isolates shortly after backgrounding. This is the standard iOS
+        // prayer-app pattern: short adhan in the system notification, full
+        // adhan only if the user has the app open at fire time.
         await _scheduleIosPrayerNotification(
           id: prayer.name.index,
           fireTime: alarmTime,
@@ -189,6 +230,12 @@ class NotificationService implements NotificationRepository {
           adhanType: adhanType,
           minutesBefore: settings.notificationMinutesBefore,
         );
+        if (adhanType != _kAdhanTypeSilent) {
+          _scheduleIosAdhanTimer(
+            fireTime: prayer.time,
+            isFajr: prayer.name == PrayerName.fajr,
+          );
+        }
       } else {
         await NativeAlarmService.scheduleExactPrayerAlarm(
           id: prayer.name.index,
@@ -209,10 +256,39 @@ class NotificationService implements NotificationRepository {
   @override
   Future<void> cancelAllPrayers() async {
     if (Platform.isIOS) {
+      _cancelIosAdhanTimers();
       await _notifications.cancelAll();
       return;
     }
     await NativeAlarmService.cancelAllPrayerAlarms();
+  }
+
+  // ── iOS in-app Adhan playback ───────────────────────────────────────────────
+
+  /// Schedules a Dart [Timer] that drives [AdhanAudioService] at [fireTime].
+  /// Used on iOS only — Android plays the full Adhan via its notification
+  /// channel sound and needs no Dart-side Timer.
+  ///
+  /// Timers do not survive an app kill; the next [scheduleAllPrayers] call
+  /// (triggered by [PrayerTimesNotifier.loadPrayerTimes] on app start or by
+  /// a settings change) rebuilds them.
+  void _scheduleIosAdhanTimer({
+    required DateTime fireTime,
+    required bool isFajr,
+  }) {
+    final delay = fireTime.difference(DateTime.now());
+    if (delay.isNegative) return;
+    final timer = Timer(delay, () {
+      AdhanAudioService().playAdhan(isFajr: isFajr);
+    });
+    _iosAdhanTimers.add(timer);
+  }
+
+  void _cancelIosAdhanTimers() {
+    for (final t in _iosAdhanTimers) {
+      t.cancel();
+    }
+    _iosAdhanTimers.clear();
   }
 
   // ── iOS scheduling ──────────────────────────────────────────────────────────

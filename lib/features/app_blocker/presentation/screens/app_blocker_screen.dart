@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/features/app_blocker/domain/entities/blocked_app.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/providers/app_blocker_providers.dart';
+import 'package:prayer_lock/features/prayer_times/presentation/providers/prayer_times_providers.dart';
 
 class AppBlockerScreen extends ConsumerStatefulWidget {
   const AppBlockerScreen({super.key});
@@ -116,19 +117,19 @@ class _AppBlockerScreenState extends ConsumerState<AppBlockerScreen>
             ),
 
           // ── Permission banners ───────────────────────────────────────────
-          if (!state.hasUsageStatsPermission)
+          if (!state.hasAccessibilityPermission)
             SliverToBoxAdapter(
               child: _PermissionBanner(
-                icon: Icons.query_stats_rounded,
-                title: 'Usage Access Required',
+                icon: Icons.accessibility_new_rounded,
+                title: 'Accessibility Service Required',
                 subtitle:
-                    'Needed to detect which app is in the foreground so Prayer Lock can block it.',
+                    'Detects which app is in the foreground during prayer windows. Prayer Lock never reads or transmits screen content.',
                 buttonLabel: 'Grant Access',
                 onTap:
                     () =>
                         ref
                             .read(appBlockerProvider.notifier)
-                            .openUsageStatsSettings(),
+                            .openAccessibilitySettings(),
               ),
             ),
           if (!state.hasOverlayPermission)
@@ -147,17 +148,22 @@ class _AppBlockerScreenState extends ConsumerState<AppBlockerScreen>
               ),
             ),
 
-          // ── Service toggle ───────────────────────────────────────────────
+          // ── Privacy disclosure (Play Store requirement) ──────────────────
+          const SliverToBoxAdapter(child: _DisclosureCard()),
+
+          // ── Auto-blocking toggle ─────────────────────────────────────────
           SliverToBoxAdapter(
             child: _ServiceToggleCard(
-              isRunning: state.isServiceRunning,
+              isAutoEnabled: state.isAutoBlockingEnabled,
               isToggling: state.isTogglingService,
               isEnabled: state.hasAllPermissions,
               blockedCount: state.blockedPackages.length,
-              onToggle:
-                  (value) => ref
-                      .read(appBlockerProvider.notifier)
-                      .toggleService(enable: value),
+              onToggle: (value) =>
+                  ref.read(appBlockerProvider.notifier).toggleAutoBlocking(
+                        enable: value,
+                        prayerTimes:
+                            ref.read(prayerTimesProvider).prayerTimes,
+                      ),
             ),
           ),
 
@@ -324,14 +330,14 @@ class _AppBlockerScreenState extends ConsumerState<AppBlockerScreen>
 
 class _ServiceToggleCard extends StatelessWidget {
   const _ServiceToggleCard({
-    required this.isRunning,
+    required this.isAutoEnabled,
     required this.isToggling,
     required this.isEnabled,
     required this.blockedCount,
     required this.onToggle,
   });
 
-  final bool isRunning;
+  final bool isAutoEnabled;
   final bool isToggling;
   final bool isEnabled;
   final int blockedCount;
@@ -345,16 +351,14 @@ class _ServiceToggleCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Container(
         decoration: BoxDecoration(
-          color:
-              isRunning
-                  ? cs.primary.withValues(alpha: 0.08)
-                  : cs.surfaceContainer,
+          color: isAutoEnabled
+              ? cs.primary.withValues(alpha: 0.08)
+              : cs.surfaceContainer,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color:
-                isRunning
-                    ? cs.primary.withValues(alpha: 0.3)
-                    : cs.outlineVariant,
+            color: isAutoEnabled
+                ? cs.primary.withValues(alpha: 0.3)
+                : cs.outlineVariant,
           ),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -364,13 +368,13 @@ class _ServiceToggleCard extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: (isRunning ? cs.primary : cs.onSurfaceVariant)
+                color: (isAutoEnabled ? cs.primary : cs.onSurfaceVariant)
                     .withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                isRunning ? Icons.lock_rounded : Icons.lock_open_rounded,
-                color: isRunning ? cs.primary : cs.onSurfaceVariant,
+                isAutoEnabled ? Icons.lock_rounded : Icons.lock_open_rounded,
+                color: isAutoEnabled ? cs.primary : cs.onSurfaceVariant,
                 size: 22,
               ),
             ),
@@ -380,7 +384,7 @@ class _ServiceToggleCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Block Apps During Prayer',
+                    'Block during prayer windows',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -389,14 +393,14 @@ class _ServiceToggleCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isRunning
-                        ? '$blockedCount app${blockedCount == 1 ? '' : 's'} being blocked'
+                    isAutoEnabled
+                        ? '$blockedCount app${blockedCount == 1 ? '' : 's'} blocked at adhan for 20 min'
                         : isEnabled
-                        ? 'Tap to start blocking'
-                        : 'Grant permissions to enable',
+                            ? 'Activates automatically at each adhan'
+                            : 'Grant permissions to enable',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isRunning ? cs.primary : cs.onSurfaceVariant,
+                      color: isAutoEnabled ? cs.primary : cs.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -413,10 +417,53 @@ class _ServiceToggleCard extends StatelessWidget {
               )
             else
               Switch.adaptive(
-                value: isRunning,
+                value: isAutoEnabled,
                 onChanged: isEnabled ? onToggle : null,
-                activeColor: cs.primary,
+                activeThumbColor: cs.primary,
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Disclosure Card (Play Store transparency requirement) ────────────────────
+
+class _DisclosureCard extends StatelessWidget {
+  const _DisclosureCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainer.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cs.outlineVariant),
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.shield_outlined,
+              color: cs.primary,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Prayer Lock uses Accessibility Service only to detect which app you\'re using and show a reminder during prayer windows. It never reads, records, or sends any screen content.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
           ],
         ),
       ),

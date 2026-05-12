@@ -47,6 +47,12 @@ class RevenueCatService implements SubscriptionRepository {
   String? _weeklyProductId;
   String? _annualProductId;
 
+  /// Resolves to true once [configure] has finished successfully, or false
+  /// if it failed. Lets UI gate the upgrade button so the user gets a clear
+  /// message instead of a generic "purchase failed" later.
+  static final Completer<bool> _configReadyCompleter = Completer<bool>();
+  static Future<bool> get configReady => _configReadyCompleter.future;
+
   // ── Static initialiser ─────────────────────────────────────────────────────
 
   /// Configure the RevenueCat SDK. Called from `AppInitializer.runDeferred`
@@ -57,34 +63,44 @@ class RevenueCatService implements SubscriptionRepository {
   /// In-session sign-in / sign-out is handled separately by
   /// [RevenueCatAuthLinkService] via `Purchases.logIn` / `Purchases.logOut`.
   static Future<void> configure() async {
-    final String apiKey = Platform.isIOS ? _iosApiKey : _androidApiKey;
-    final String? firebaseUid = FirebaseAuth.instance.currentUser?.uid;
-
-    final config = PurchasesConfiguration(apiKey);
-    if (firebaseUid != null && firebaseUid.isNotEmpty) {
-      config.appUserID = firebaseUid;
-    }
-    await Purchases.configure(config);
-
-    // Keep status in sync for the lifetime of the app.
-    Purchases.addCustomerInfoUpdateListener(_instance._onCustomerInfoUpdate);
-
-    // Cache offering product ids before the first status emission so that
-    // plan detection is accurate from the start.
-    await _instance._cacheOfferingProductIds();
-
-    // Seed initial status immediately.
     try {
-      final customerInfo = await Purchases.getCustomerInfo();
-      _instance._onCustomerInfoUpdate(customerInfo);
-    } catch (e) {
-      AppLogger.error('RevenueCat initial getCustomerInfo failed', e);
-    }
+      final String apiKey = Platform.isIOS ? _iosApiKey : _androidApiKey;
+      final String? firebaseUid = FirebaseAuth.instance.currentUser?.uid;
 
-    AppLogger.info(
-      'RevenueCat configured (${Platform.isIOS ? "iOS" : "Android"}) '
-      '— appUserID: ${firebaseUid ?? "anonymous"}',
-    );
+      final config = PurchasesConfiguration(apiKey);
+      if (firebaseUid != null && firebaseUid.isNotEmpty) {
+        config.appUserID = firebaseUid;
+      }
+      await Purchases.configure(config);
+
+      // Keep status in sync for the lifetime of the app.
+      Purchases.addCustomerInfoUpdateListener(_instance._onCustomerInfoUpdate);
+
+      // Cache offering product ids before the first status emission so that
+      // plan detection is accurate from the start.
+      await _instance._cacheOfferingProductIds();
+
+      // Seed initial status immediately.
+      try {
+        final customerInfo = await Purchases.getCustomerInfo();
+        _instance._onCustomerInfoUpdate(customerInfo);
+      } catch (e) {
+        AppLogger.error('RevenueCat initial getCustomerInfo failed', e);
+      }
+
+      AppLogger.info(
+        'RevenueCat configured (${Platform.isIOS ? "iOS" : "Android"}) '
+        '— appUserID: ${firebaseUid ?? "anonymous"}',
+      );
+      if (!_configReadyCompleter.isCompleted) {
+        _configReadyCompleter.complete(true);
+      }
+    } catch (e) {
+      if (!_configReadyCompleter.isCompleted) {
+        _configReadyCompleter.complete(false);
+      }
+      rethrow;
+    }
   }
 
   Future<void> _cacheOfferingProductIds() async {

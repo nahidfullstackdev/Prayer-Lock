@@ -56,12 +56,11 @@
 	<key>NSMotionUsageDescription</key>
 	<string>Qibla compass uses the device magnetometer to point towards Makkah</string>
 
-	<!-- Background modes for notifications -->
+	<!-- Background audio: required so AdhanAudioService can play the full
+	     Adhan when the app is backgrounded at prayer time. -->
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
-		<string>processing</string>
-		<string>remote-notification</string>
+		<string>audio</string>
 	</array>
 
 	<!-- Google Sign-In callback URL scheme.
@@ -77,5 +76,11 @@
 			</array>
 		</dict>
 	</array>
+
+	<!-- Export compliance: app only uses HTTPS + Apple-provided crypto
+	     (Firebase, RevenueCat, Google Sign-In). No custom encryption.
+	     Suppresses the TestFlight export-compliance prompt on every upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

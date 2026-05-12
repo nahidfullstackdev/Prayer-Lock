@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">Prayer Lock</string>
     <string name="prayer_widget_description">Shows the next prayer time and countdown at a glance.</string>
+
+    <!-- Accessibility Service strings — shown on the system Accessibility settings screen. -->
+    <string name="accessibility_service_description">Prayer Lock uses Accessibility Service to detect when a blocked app is opened during a prayer window, so it can show the prayer reminder. Prayer Lock never reads, records, or transmits any content from your screen.</string>
+    <string name="accessibility_service_summary">Detects blocked apps during prayer windows.</string>
 </resources>

@@ -17,6 +17,10 @@ import android.util.Log
  *
  * Alarms already in the past are skipped — the user will get up-to-date
  * alarms the next time the app is opened and [scheduleAllPrayers] is called.
+ *
+ * Also reschedules the App Blocker prayer-window start/end alarms persisted
+ * by [AppBlockerChannel] so the Accessibility Service stays armed for the
+ * remainder of today's prayer windows after a reboot.
  */
 class PrayerBootReceiver : BroadcastReceiver() {
 
@@ -43,9 +47,10 @@ class PrayerBootReceiver : BroadcastReceiver() {
         }
         Log.i(TAG, "Received $action — rescheduling prayer alarms")
         rescheduleAlarms(context)
+        rescheduleBlockerWindows(context)
     }
 
-    // ── reschedule ───────────────────────────────────────────────────────────────
+    // ── reschedule prayer alarms ─────────────────────────────────────────────
 
     private fun rescheduleAlarms(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -108,5 +113,83 @@ class PrayerBootReceiver : BroadcastReceiver() {
         }
 
         Log.i(TAG, "Boot reschedule complete — rescheduled=$rescheduled skipped(past)=$skipped")
+    }
+
+    // ── reschedule App Blocker prayer windows ────────────────────────────────
+
+    /**
+     * Recreates today's blocker-window start/end alarms from the persisted
+     * timestamps written by [AppBlockerChannel.scheduleBlockerWindows]. Only
+     * touches windows whose end time is still in the future. The Dart side
+     * will overwrite these on next app open with fresh times.
+     */
+    private fun rescheduleBlockerWindows(context: Context) {
+        val prefs = context.getSharedPreferences(
+            PrayerLockAccessibilityService.PREFS_FILE,
+            Context.MODE_PRIVATE,
+        )
+        val autoEnabled = prefs.getBoolean(
+            PrayerLockAccessibilityService.PREFS_KEY_AUTO_ENABLED, false,
+        )
+        if (!autoEnabled) {
+            Log.d(TAG, "Auto-blocking disabled — skipping window reschedule")
+            return
+        }
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val now = System.currentTimeMillis()
+        var rescheduled = 0
+
+        // Reset window_active — boot wiped any in-flight state. Either an end
+        // alarm fires first (no-op) or a start alarm fires first (sets it).
+        prefs.edit()
+            .putBoolean(PrayerLockAccessibilityService.PREFS_KEY_WINDOW_ACTIVE, false)
+            .apply()
+
+        for (id in 0 until PRAYER_COUNT) {
+            val startMs = prefs.getLong("window_${id}_start_ms", -1L)
+            val endMs = prefs.getLong("window_${id}_end_ms", -1L)
+            if (startMs <= 0 || endMs <= 0 || endMs <= now) continue
+
+            if (startMs > now) {
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(startMs, null),
+                    buildWindowPendingIntent(context, id, BlockerWindowReceiver.ACTION_START),
+                )
+            } else {
+                // We rebooted mid-window — flip it active immediately.
+                prefs.edit()
+                    .putBoolean(PrayerLockAccessibilityService.PREFS_KEY_WINDOW_ACTIVE, true)
+                    .apply()
+            }
+
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(endMs, null),
+                buildWindowPendingIntent(context, id, BlockerWindowReceiver.ACTION_END),
+            )
+            rescheduled++
+        }
+
+        Log.i(TAG, "Boot blocker-window reschedule complete — count=$rescheduled")
+    }
+
+    private fun buildWindowPendingIntent(
+        context: Context,
+        prayerId: Int,
+        action: String,
+    ): PendingIntent {
+        val requestCode = when (action) {
+            BlockerWindowReceiver.ACTION_START -> BlockerWindowReceiver.REQ_BASE_START + prayerId
+            BlockerWindowReceiver.ACTION_END -> BlockerWindowReceiver.REQ_BASE_END + prayerId
+            else -> error("Unknown action: $action")
+        }
+        val intent = Intent(context, BlockerWindowReceiver::class.java).apply {
+            this.action = action
+            putExtra(BlockerWindowReceiver.EXTRA_PRAYER_ID, prayerId)
+        }
+        return PendingIntent.getBroadcast(
+            context, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 }
