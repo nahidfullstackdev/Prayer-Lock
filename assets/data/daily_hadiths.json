@@ -1,0 +1,306 @@
+{
+  "version": 1,
+  "source": "Authentic narrations from the Six Canonical Books (Kutub as-Sittah)",
+  "hadiths": [
+    {
+      "id": "hadith_001",
+      "text": "The best among you are those who have the best manners and character.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 3559"
+    },
+    {
+      "id": "hadith_002",
+      "text": "None of you truly believes until he loves for his brother what he loves for himself.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 13, Muslim 45"
+    },
+    {
+      "id": "hadith_003",
+      "text": "Actions are judged by intentions, and every person will have what they intended.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 1, Muslim 1907"
+    },
+    {
+      "id": "hadith_004",
+      "text": "Whoever believes in Allah and the Last Day should speak good or remain silent.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6018"
+    },
+    {
+      "id": "hadith_005",
+      "text": "The strong is not the one who overcomes others by his strength, but the one who controls himself when angry.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 6114"
+    },
+    {
+      "id": "hadith_006",
+      "text": "A Muslim is one from whose tongue and hand other Muslims are safe.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 10"
+    },
+    {
+      "id": "hadith_007",
+      "text": "Make things easy and do not make them difficult. Give glad tidings and do not repel.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 69"
+    },
+    {
+      "id": "hadith_008",
+      "text": "Religion is sincerity — to Allah, His Book, His Messenger, and to the leaders and common folk of the Muslims.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 55"
+    },
+    {
+      "id": "hadith_009",
+      "text": "He is not one of us who does not show mercy to our young and respect to our elders.",
+      "collection": "Jami at-Tirmidhi",
+      "reference": "Tirmidhi 1919"
+    },
+    {
+      "id": "hadith_010",
+      "text": "Cleanliness is half of faith.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 223"
+    },
+    {
+      "id": "hadith_011",
+      "text": "The most beloved deeds to Allah are those done consistently, even if they are small.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6464, Muslim 783"
+    },
+    {
+      "id": "hadith_012",
+      "text": "A kind word is charity.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 2989, Muslim 1009"
+    },
+    {
+      "id": "hadith_013",
+      "text": "Smiling at your brother is charity.",
+      "collection": "Jami at-Tirmidhi",
+      "reference": "Tirmidhi 1956"
+    },
+    {
+      "id": "hadith_014",
+      "text": "Whoever does not show mercy will not be shown mercy.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 7376, Muslim 2319"
+    },
+    {
+      "id": "hadith_015",
+      "text": "The world is a prison for the believer and a paradise for the disbeliever.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 2956"
+    },
+    {
+      "id": "hadith_016",
+      "text": "Modesty brings nothing but good.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6117, Muslim 37"
+    },
+    {
+      "id": "hadith_017",
+      "text": "Allah is gentle and loves gentleness in all matters.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6927, Muslim 2593"
+    },
+    {
+      "id": "hadith_018",
+      "text": "Whoever believes in Allah and the Last Day should honour his guest.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6019, Muslim 47"
+    },
+    {
+      "id": "hadith_019",
+      "text": "The supplication of a Muslim for his brother in his absence is answered.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 2733"
+    },
+    {
+      "id": "hadith_020",
+      "text": "Whoever guides another to good will have a reward like the one who does it.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 1893"
+    },
+    {
+      "id": "hadith_021",
+      "text": "Two blessings which many people waste: good health and free time.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 6412"
+    },
+    {
+      "id": "hadith_022",
+      "text": "Whoever among you sees evil, let him change it with his hand; if not, then with his tongue; and if not, then with his heart — and that is the weakest of faith.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 49"
+    },
+    {
+      "id": "hadith_023",
+      "text": "The most perfect of believers in faith are those with the best character.",
+      "collection": "Jami at-Tirmidhi",
+      "reference": "Tirmidhi 1162"
+    },
+    {
+      "id": "hadith_024",
+      "text": "Allah does not look at your appearance or wealth, but rather He looks at your hearts and deeds.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 2564"
+    },
+    {
+      "id": "hadith_025",
+      "text": "A person is upon the religion of his close friend, so let each of you look to whom he befriends.",
+      "collection": "Sunan Abi Dawud",
+      "reference": "Abu Dawud 4833"
+    },
+    {
+      "id": "hadith_026",
+      "text": "Be in this world as if you were a stranger or a traveller.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 6416"
+    },
+    {
+      "id": "hadith_027",
+      "text": "The most beloved places to Allah are the mosques, and the most disliked places to Allah are the markets.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 671"
+    },
+    {
+      "id": "hadith_028",
+      "text": "He who does not thank people does not thank Allah.",
+      "collection": "Sunan Abi Dawud",
+      "reference": "Abu Dawud 4811"
+    },
+    {
+      "id": "hadith_029",
+      "text": "Truthfulness leads to righteousness, and righteousness leads to Paradise.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6094, Muslim 2607"
+    },
+    {
+      "id": "hadith_030",
+      "text": "Beware of suspicion, for suspicion is the most untruthful of speech.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6064, Muslim 2563"
+    },
+    {
+      "id": "hadith_031",
+      "text": "The believers in their mutual love and mercy are like one body — when one limb suffers, the whole body responds with fever and sleeplessness.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6011, Muslim 2586"
+    },
+    {
+      "id": "hadith_032",
+      "text": "Whoever relieves a believer's distress in this world, Allah will relieve his distress on the Day of Resurrection.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 2699"
+    },
+    {
+      "id": "hadith_033",
+      "text": "The best of you is the one who is best to his family, and I am the best of you to my family.",
+      "collection": "Jami at-Tirmidhi",
+      "reference": "Tirmidhi 3895"
+    },
+    {
+      "id": "hadith_034",
+      "text": "Seeking knowledge is an obligation upon every Muslim.",
+      "collection": "Sunan Ibn Majah",
+      "reference": "Ibn Majah 224"
+    },
+    {
+      "id": "hadith_035",
+      "text": "Whoever treads a path in search of knowledge, Allah will make easy for him a path to Paradise.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 2699"
+    },
+    {
+      "id": "hadith_036",
+      "text": "Remember often the destroyer of pleasures: death.",
+      "collection": "Jami at-Tirmidhi",
+      "reference": "Tirmidhi 2307"
+    },
+    {
+      "id": "hadith_037",
+      "text": "The upper hand is better than the lower hand — the upper hand is the one that gives, and the lower hand is the one that receives.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 1429, Muslim 1033"
+    },
+    {
+      "id": "hadith_038",
+      "text": "Allah is more pleased with the repentance of His servant than one of you who finds his lost camel after losing it.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6309, Muslim 2747"
+    },
+    {
+      "id": "hadith_039",
+      "text": "The supplication of a parent for his child is not rejected.",
+      "collection": "Jami at-Tirmidhi",
+      "reference": "Tirmidhi 1905"
+    },
+    {
+      "id": "hadith_040",
+      "text": "The best charity is that given while you are healthy, fearful of poverty, and hoping for wealth.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 1419"
+    },
+    {
+      "id": "hadith_041",
+      "text": "Whoever fasts Ramadan out of faith and hoping for reward, his previous sins will be forgiven.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 38, Muslim 760"
+    },
+    {
+      "id": "hadith_042",
+      "text": "When a person dies, his deeds end except for three: ongoing charity, beneficial knowledge, or a righteous child who prays for him.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 1631"
+    },
+    {
+      "id": "hadith_043",
+      "text": "Patience is at the first stroke of calamity.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 1283"
+    },
+    {
+      "id": "hadith_044",
+      "text": "Whoever loves to meet Allah, Allah loves to meet him.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 6507, Muslim 2683"
+    },
+    {
+      "id": "hadith_045",
+      "text": "The most beloved words to Allah are four: SubhanAllah, Alhamdulillah, La ilaha illa Allah, and Allahu Akbar.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 2137"
+    },
+    {
+      "id": "hadith_046",
+      "text": "Whoever stays awake the Night of Decree out of faith and hoping for reward, his previous sins will be forgiven.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 1901, Muslim 760"
+    },
+    {
+      "id": "hadith_047",
+      "text": "The example of a believer who recites the Qur'an is that of a citron — its fragrance is pleasant and its taste is sweet.",
+      "collection": "Bukhari & Muslim",
+      "reference": "Bukhari 5020, Muslim 797"
+    },
+    {
+      "id": "hadith_048",
+      "text": "Whoever takes a path in search of knowledge, Allah eases for him a path to Paradise.",
+      "collection": "Jami at-Tirmidhi",
+      "reference": "Tirmidhi 2646"
+    },
+    {
+      "id": "hadith_049",
+      "text": "Pray as you have seen me pray.",
+      "collection": "Sahih al-Bukhari",
+      "reference": "Bukhari 631"
+    },
+    {
+      "id": "hadith_050",
+      "text": "Verily, Allah is beautiful and loves beauty.",
+      "collection": "Sahih Muslim",
+      "reference": "Muslim 91"
+    }
+  ]
+}

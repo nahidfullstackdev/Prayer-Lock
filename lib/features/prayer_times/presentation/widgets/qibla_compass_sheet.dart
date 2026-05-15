@@ -1,11 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_qiblah/flutter_qiblah.dart';
+import 'package:flutter_compass_v2/flutter_compass_v2.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:prayer_lock/features/prayer_times/presentation/providers/location_notifier.dart';
+import 'package:prayer_lock/features/prayer_times/domain/entities/location_data.dart';
+import 'package:prayer_lock/features/prayer_times/domain/utils/qibla_math.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/prayer_times_providers.dart';
-import 'package:prayer_lock/features/prayer_times/presentation/providers/qibla_notifier.dart';
 
 /// Shows the Qibla compass as a modal bottom sheet.
 void showQiblaSheet(BuildContext context) {
@@ -17,29 +17,27 @@ void showQiblaSheet(BuildContext context) {
   );
 }
 
-class QiblaCompassSheet extends ConsumerStatefulWidget {
+class QiblaCompassSheet extends ConsumerWidget {
   const QiblaCompassSheet({super.key});
 
   @override
-  ConsumerState<QiblaCompassSheet> createState() => _QiblaCompassSheetState();
-}
-
-class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
-  @override
-  void initState() {
-    super.initState();
-    final location = ref.read(locationProvider).location;
-    if (location != null) {
-      ref.read(qiblaProvider.notifier).fetch(location);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final qiblaState = ref.watch(qiblaProvider);
-    final locationState = ref.watch(locationProvider);
+    final location = ref.watch(locationProvider).location;
+
+    // Qibla bearing and distance are pure functions of the user's location.
+    // The moment locationProvider emits a location, both are available —
+    // no async, no spinner, no notifier needed.
+    final qiblaBearing = location == null
+        ? null
+        : QiblaMath.calculateQiblaBearing(
+            location.latitude,
+            location.longitude,
+          );
+    final distanceKm = location == null
+        ? null
+        : QiblaMath.distanceToKaabaKm(location.latitude, location.longitude);
 
     return Container(
       margin: const EdgeInsets.only(top: 80),
@@ -50,7 +48,6 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Drag handle
           Container(
             margin: const EdgeInsets.only(top: 12),
             width: 40,
@@ -60,7 +57,6 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // Header row
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Row(
@@ -91,8 +87,8 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
                       ),
                     ),
                     Text(
-                      locationState.location?.cityName ??
-                          locationState.location?.countryName ??
+                      location?.cityName ??
+                          location?.countryName ??
                           'Your location',
                       style: TextStyle(
                         fontSize: 12,
@@ -105,22 +101,33 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
             ),
           ),
           const SizedBox(height: 28),
-          // Compass with live stream
-          StreamBuilder<QiblahDirection>(
-            stream: FlutterQiblah.qiblahStream,
+          StreamBuilder<CompassEvent>(
+            stream: FlutterCompass.events,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return _buildCompassError(cs);
               }
 
-              final direction = snapshot.data?.direction ?? 0.0;
-              final isFacingQibla = snapshot.hasData && direction.abs() < 10.0;
+              final deviceHeading = snapshot.data?.heading ?? 0.0;
+              final needleRotation = qiblaBearing == null
+                  ? 0.0
+                  : (qiblaBearing - deviceHeading + 360) % 360;
+              // Dial counter-rotates so N stays anchored to real north.
+              final faceRotation = (360 - deviceHeading) % 360;
+              final isFacingQibla = snapshot.hasData &&
+                  snapshot.data?.heading != null &&
+                  qiblaBearing != null &&
+                  (needleRotation < 10.0 || needleRotation > 350.0);
 
               return Column(
                 children: [
-                  _CompassWidget(direction: direction, cs: cs, isDark: isDark),
+                  _CompassWidget(
+                    rotationDeg: needleRotation,
+                    faceRotationDeg: faceRotation,
+                    cs: cs,
+                    isDark: isDark,
+                  ),
                   const SizedBox(height: 20),
-                  // "Facing Qibla" badge
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 250),
                     child:
@@ -168,8 +175,7 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
             },
           ),
           const SizedBox(height: 20),
-          // Distance card
-          _buildDistanceRow(cs, qiblaState, locationState),
+          _buildDistanceRow(cs, distanceKm, location),
           const SizedBox(height: 36),
         ],
       ),
@@ -178,22 +184,10 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
 
   Widget _buildDistanceRow(
     ColorScheme cs,
-    QiblaState qiblaState,
-    LocationState locationState,
+    double? distanceKm,
+    LocationData? location,
   ) {
-    if (qiblaState.isLoading) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-        ),
-      );
-    }
-
-    if (qiblaState.qiblaDirection != null) {
-      final distanceKm = qiblaState.qiblaDirection!.distance.toStringAsFixed(0);
+    if (distanceKm != null) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 24),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -208,7 +202,7 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
             Icon(Icons.mosque_rounded, size: 18, color: cs.secondary),
             const SizedBox(width: 10),
             Text(
-              '$distanceKm km from the Holy Kaaba',
+              '${distanceKm.toStringAsFixed(0)} km from the Holy Kaaba',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -220,7 +214,7 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
       );
     }
 
-    if (locationState.location == null) {
+    if (location == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Text(
@@ -258,12 +252,19 @@ class _QiblaCompassSheetState extends ConsumerState<QiblaCompassSheet> {
 // ─── Compass Widget ───────────────────────────────────────────────────────────
 
 class _CompassWidget extends StatefulWidget {
-  final double direction;
+  /// Degrees the needle should point, measured clockwise from straight up.
+  final double rotationDeg;
+
+  /// Degrees the dial (ring + ticks + N/S/E/W labels) should rotate so that
+  /// N stays anchored to real north. Typically `(360 − deviceHeading) % 360`.
+  final double faceRotationDeg;
+
   final ColorScheme cs;
   final bool isDark;
 
   const _CompassWidget({
-    required this.direction,
+    required this.rotationDeg,
+    required this.faceRotationDeg,
     required this.cs,
     required this.isDark,
   });
@@ -273,31 +274,53 @@ class _CompassWidget extends StatefulWidget {
 }
 
 class _CompassWidgetState extends State<_CompassWidget> {
-  double _turns = 0;
-  bool _initialized = false;
+  double _needleTurns = 0;
+  double _faceTurns = 0;
+  bool _needleInitialized = false;
+  bool _faceInitialized = false;
 
   @override
   void didUpdateWidget(_CompassWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.direction != widget.direction) {
-      _updateTurns(widget.direction);
+    if (oldWidget.rotationDeg != widget.rotationDeg) {
+      setState(() {
+        final result = _stepTurns(
+          _needleTurns,
+          _needleInitialized,
+          widget.rotationDeg,
+        );
+        _needleTurns = result.turns;
+        _needleInitialized = true;
+      });
+    }
+    if (oldWidget.faceRotationDeg != widget.faceRotationDeg) {
+      setState(() {
+        final result = _stepTurns(
+          _faceTurns,
+          _faceInitialized,
+          widget.faceRotationDeg,
+        );
+        _faceTurns = result.turns;
+        _faceInitialized = true;
+      });
     }
   }
 
   /// Shortest-path interpolation to avoid 359° → 1° spinning all the way around.
-  void _updateTurns(double newDirection) {
-    final targetTurns = newDirection / 360;
-    if (!_initialized) {
-      _turns = targetTurns;
-      _initialized = true;
-      setState(() {});
-      return;
+  /// On the first update, snaps directly to the target.
+  ({double turns}) _stepTurns(
+    double currentTurns,
+    bool initialized,
+    double targetDeg,
+  ) {
+    final targetTurns = targetDeg / 360;
+    if (!initialized) {
+      return (turns: targetTurns);
     }
-    // Delta in turns, clamped to [-0.5, 0.5] (shorter arc).
-    var delta = targetTurns - (_turns % 1.0);
+    var delta = targetTurns - (currentTurns % 1.0);
     if (delta > 0.5) delta -= 1.0;
     if (delta < -0.5) delta += 1.0;
-    setState(() => _turns += delta);
+    return (turns: currentTurns + delta);
   }
 
   @override
@@ -311,18 +334,20 @@ class _CompassWidgetState extends State<_CompassWidget> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Background circle
           Container(
             decoration: BoxDecoration(shape: BoxShape.circle, color: bgColor),
           ),
-          // Ring + tick marks + cardinal letters (static)
-          CustomPaint(
-            size: const Size(240, 240),
-            painter: _CompassFacePainter(cs: widget.cs),
-          ),
-          // Rotating needle
           AnimatedRotation(
-            turns: _turns,
+            turns: _faceTurns,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOut,
+            child: CustomPaint(
+              size: const Size(240, 240),
+              painter: _CompassFacePainter(cs: widget.cs),
+            ),
+          ),
+          AnimatedRotation(
+            turns: _needleTurns,
             duration: const Duration(milliseconds: 400),
             curve: Curves.easeOut,
             child: CustomPaint(
@@ -330,7 +355,6 @@ class _CompassWidgetState extends State<_CompassWidget> {
               painter: _NeedlePainter(cs: widget.cs),
             ),
           ),
-          // Center cap
           Container(
             width: 16,
             height: 16,
@@ -358,7 +382,6 @@ class _CompassFacePainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2 * 0.86;
 
-    // Outer ring
     canvas.drawCircle(
       center,
       radius,
@@ -368,7 +391,6 @@ class _CompassFacePainter extends CustomPainter {
         ..strokeWidth = 1.5,
     );
 
-    // Tick marks
     for (int deg = 0; deg < 360; deg += 10) {
       final isCardinal = deg % 90 == 0;
       final isMajor = deg % 45 == 0;
@@ -402,7 +424,6 @@ class _CompassFacePainter extends CustomPainter {
       );
     }
 
-    // Cardinal direction labels (N, S, E, W)
     final labelRadius = radius - 26;
     _drawLabel(
       canvas,
@@ -469,12 +490,14 @@ class _NeedlePainter extends CustomPainter {
     final cy = size.height / 2;
     final halfH = size.height / 2;
 
-    // Green tip (points toward Qibla = UP when direction == 0)
+    // Tip sits slightly lower than before to leave room for the Kaaba icon.
+    final tipY = cy - halfH * 0.52;
+
     final greenPath =
         Path()
-          ..moveTo(cx, cy - halfH * 0.60) // tip
-          ..lineTo(cx - 8, cy) // left base
-          ..lineTo(cx + 8, cy) // right base
+          ..moveTo(cx, tipY)
+          ..lineTo(cx - 8, cy)
+          ..lineTo(cx + 8, cy)
           ..close();
 
     canvas.drawPath(
@@ -484,7 +507,6 @@ class _NeedlePainter extends CustomPainter {
         ..style = PaintingStyle.fill,
     );
 
-    // Subtle highlight on the green half
     canvas.drawPath(
       greenPath,
       Paint()
@@ -492,22 +514,72 @@ class _NeedlePainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [Colors.white.withValues(alpha: 0.18), Colors.transparent],
-        ).createShader(
-          Rect.fromLTWH(cx - 8, cy - halfH * 0.60, 16, halfH * 0.60),
-        ),
+        ).createShader(Rect.fromLTWH(cx - 8, tipY, 16, cy - tipY)),
     );
 
-    // Gray base (opposite end)
     final grayPath =
         Path()
-          ..moveTo(cx, cy + halfH * 0.36) // base tip
-          ..lineTo(cx - 6, cy) // left
-          ..lineTo(cx + 6, cy) // right
+          ..moveTo(cx, cy + halfH * 0.36)
+          ..lineTo(cx - 6, cy)
+          ..lineTo(cx + 6, cy)
           ..close();
 
     canvas.drawPath(
       grayPath,
       Paint()..color = cs.onSurface.withValues(alpha: 0.2),
+    );
+
+    _paintKaaba(canvas, Offset(cx, tipY));
+  }
+
+  /// Paints a stylized miniature Kaaba whose bottom edge sits at [tip].
+  void _paintKaaba(Canvas canvas, Offset tip) {
+    const cubeSize = 22.0;
+    const gap = 2.0;
+    final cube = Rect.fromLTWH(
+      tip.dx - cubeSize / 2,
+      tip.dy - cubeSize - gap,
+      cubeSize,
+      cubeSize,
+    );
+    final rrect = RRect.fromRectAndRadius(cube, const Radius.circular(2.5));
+
+    canvas.drawRRect(
+      rrect.shift(const Offset(0, 1.5)),
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.25)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+
+    canvas.drawRRect(
+      rrect,
+      Paint()..color = const Color(0xFF1A1A1A),
+    );
+
+    final bandTop = cube.top + cubeSize * 0.22;
+    final band = Rect.fromLTWH(cube.left, bandTop, cubeSize, 3.0);
+    canvas.drawRect(
+      band,
+      Paint()..color = const Color(0xFFD4AF37),
+    );
+
+    final door = Rect.fromLTWH(
+      cube.right - 4.5,
+      cube.top + cubeSize * 0.5,
+      1.8,
+      cubeSize * 0.4,
+    );
+    canvas.drawRect(
+      door,
+      Paint()..color = const Color(0xFFD4AF37),
+    );
+
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = cs.onSurface.withValues(alpha: 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
     );
   }
 

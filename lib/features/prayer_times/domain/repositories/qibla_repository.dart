@@ -9,8 +9,4 @@ abstract class QiblaRepository {
   Future<Either<Failure, QiblaDirection>> getQiblaDirection(
     LocationData location,
   );
-
-  /// Stream of compass heading updates for live compass widget
-  /// Returns heading in degrees from North (0-360)
-  Stream<double> getCompassHeadingStream();
 }

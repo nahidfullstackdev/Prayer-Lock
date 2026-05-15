@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:prayer_lock/core/widgets/adhan_test_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:prayer_lock/features/app_blocker/presentation/screens/app_blocker_screen.dart';
+import 'package:prayer_lock/features/home/data/daily_content_data_source.dart';
+import 'package:prayer_lock/features/home/presentation/providers/daily_content_providers.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/prayer_name.dart';
 import 'package:prayer_lock/features/prayer_times/presentation/providers/location_notifier.dart';
@@ -108,7 +110,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   _buildHadithOfTheDay(context),
                   const SizedBox(height: 20),
                   // ── DEBUG: remove this block when done testing ──────────
-                  const AdhanTestWidget(),
+                 // const AdhanTestWidget(),
                   // ────────────────────────────────────────────────────────
                   const SizedBox(height: 32),
                 ],
@@ -773,8 +775,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   // ─── Verse of the Day ─────────────────────────────────────────────────────
 
+  // Shown on first paint (provider still loading) and on provider error so
+  // the card never renders empty.
+  static const DailyVerse _fallbackVerse = DailyVerse(
+    id: 'fallback',
+    surahNumber: 94,
+    surahName: 'Ash-Sharh',
+    ayahNumber: 6,
+    arabic:
+        'إِنَّ مَعَ الْعُسْرِ يُسْرًا',
+    translation: 'Indeed, with hardship comes ease.',
+  );
+
   Widget _buildVerseOfTheDay(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final verse = ref.watch(dailyVerseProvider).value ?? _fallbackVerse;
 
     return Container(
       decoration: BoxDecoration(
@@ -821,7 +836,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             child: Column(
               children: [
                 Text(
-                  '\u0625\u0650\u0646\u064E\u0651 \u0645\u064E\u0639\u064E \u0627\u0644\u0652\u0639\u064F\u0633\u0652\u0631\u0650 \u064A\u064F\u0633\u0652\u0631\u064B\u0627',
+                  verse.arabic,
                   textAlign: TextAlign.center,
                   textDirection: TextDirection.rtl,
                   style: TextStyle(
@@ -833,7 +848,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Indeed, with hardship comes ease.',
+                  verse.translation,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
@@ -843,7 +858,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Surah Ash-Sharh 94:6',
+                  verse.reference,
                   style: TextStyle(
                     fontSize: 12,
                     color: cs.secondary,
@@ -861,8 +876,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   // ─── Hadith of the Day ────────────────────────────────────────────────────
 
+  // Shown on first paint (provider still loading) and on provider error so
+  // the card never renders empty.
+  static const DailyHadith _fallbackHadith = DailyHadith(
+    id: 'fallback',
+    text:
+        'The best among you are those who have the best manners and character.',
+    collection: 'Sahih al-Bukhari',
+    reference: 'Bukhari 3559',
+  );
+
   Widget _buildHadithOfTheDay(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final hadith = ref.watch(dailyHadithProvider).value ?? _fallbackHadith;
 
     return Container(
       decoration: BoxDecoration(
@@ -914,7 +940,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '"The best among you are those who have the best manners and character."',
+                        '"${hadith.text}"',
                         style: TextStyle(
                           fontSize: 14,
                           color: cs.onSurface.withValues(alpha: 0.85),
@@ -924,7 +950,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '— Sahih al-Bukhari',
+                        '— ${hadith.collection}',
                         style: TextStyle(
                           fontSize: 12,
                           color: cs.secondary,

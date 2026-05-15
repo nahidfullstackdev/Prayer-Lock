@@ -27,7 +27,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Keep in sync with version in pubspec.yaml
-const String _kAppVersion = '1.0.6';
+const String _kAppVersion = '1.0.7';
 
 // Store URLs for the Share + Rate actions in MoreScreen.
 const String _kAndroidPackageId = 'com.mdnahid.prayerlock';
@@ -275,7 +275,9 @@ class MoreScreen extends ConsumerWidget {
     if (url == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sharing will be available after launch')),
+          const SnackBar(
+            content: Text('Sharing will be available after launch'),
+          ),
         );
       }
       return;
@@ -291,7 +293,9 @@ class MoreScreen extends ConsumerWidget {
     if (url == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rating will be available after launch')),
+          const SnackBar(
+            content: Text('Rating will be available after launch'),
+          ),
         );
       }
       return;
@@ -593,45 +597,32 @@ class MoreScreen extends ConsumerWidget {
                         onTap: () => _addHomeWidget(context, ref),
                       ),
                       Divider(height: 1, indent: 68, color: cs.outlineVariant),
-                      // TEMP: Pro gate disabled for testing — restore block below to re-enable.
                       _MoreRow(
                         icon: Icons.lock_outline_rounded,
                         color: cs.primary,
                         title: 'App Blocker',
-                        onTap:
-                            () => Navigator.push(
+                        trailing:
+                            ref.watch(isProProvider) ? null : const _ProBadge(),
+                        onTap: () {
+                          if (ref.read(isProProvider)) {
+                            Navigator.push(
                               context,
                               MaterialPageRoute<void>(
                                 builder: (_) => const AppBlockerScreen(),
                               ),
-                            ),
+                            );
+                          } else {
+                            showProPaywall(
+                              context,
+                              ref.read(subscriptionRepositoryProvider),
+                              placement: 'app_blocker_locked',
+                              featureTitle: 'App Blocker',
+                              featureDescription:
+                                  'Block distracting apps during every Salah window.',
+                            );
+                          }
+                        },
                       ),
-                      // _MoreRow(
-                      //   icon: Icons.lock_outline_rounded,
-                      //   color: cs.primary,
-                      //   title: 'App Blocker',
-                      //   trailing:
-                      //       ref.watch(isProProvider) ? null : const _ProBadge(),
-                      //   onTap: () {
-                      //     if (ref.read(isProProvider)) {
-                      //       Navigator.push(
-                      //         context,
-                      //         MaterialPageRoute<void>(
-                      //           builder: (_) => const AppBlockerScreen(),
-                      //         ),
-                      //       );
-                      //     } else {
-                      //       showProPaywall(
-                      //         context,
-                      //         ref.read(subscriptionRepositoryProvider),
-                      //         placement: 'app_blocker_locked',
-                      //         featureTitle: 'App Blocker',
-                      //         featureDescription:
-                      //             'Block distracting apps during every Salah window.',
-                      //       );
-                      //     }
-                      //   },
-                      // ),
                     ],
                   ],
                 ),

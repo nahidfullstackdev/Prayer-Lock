@@ -1,0 +1,406 @@
+{
+  "version": 1,
+  "source": "The Noble Qur'an — Sahih International translation",
+  "verses": [
+    {
+      "id": "verse_001",
+      "surahNumber": 94,
+      "surahName": "Ash-Sharh",
+      "ayahNumber": 6,
+      "arabic": "إِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
+      "translation": "Indeed, with hardship comes ease."
+    },
+    {
+      "id": "verse_002",
+      "surahNumber": 2,
+      "surahName": "Al-Baqarah",
+      "ayahNumber": 152,
+      "arabic": "فَٱذْكُرُونِىٓ أَذْكُرْكُمْ وَٱشْكُرُوا۟ لِى وَلَا تَكْفُرُونِ",
+      "translation": "So remember Me; I will remember you. And be grateful to Me and do not deny Me."
+    },
+    {
+      "id": "verse_003",
+      "surahNumber": 2,
+      "surahName": "Al-Baqarah",
+      "ayahNumber": 286,
+      "arabic": "لَا يُكَلِّفُ ٱللَّهُ نَفْسًا إِلَّا وُسْعَهَا",
+      "translation": "Allah does not burden a soul beyond that it can bear."
+    },
+    {
+      "id": "verse_004",
+      "surahNumber": 65,
+      "surahName": "At-Talaq",
+      "ayahNumber": 3,
+      "arabic": "وَمَن يَتَوَكَّلْ عَلَى ٱللَّهِ فَهُوَ حَسْبُهُۥٓ",
+      "translation": "And whoever relies upon Allah — then He is sufficient for him."
+    },
+    {
+      "id": "verse_005",
+      "surahNumber": 65,
+      "surahName": "At-Talaq",
+      "ayahNumber": 2,
+      "arabic": "وَمَن يَتَّقِ ٱللَّهَ يَجْعَل لَّهُۥ مَخْرَجًا",
+      "translation": "And whoever fears Allah — He will make for him a way out."
+    },
+    {
+      "id": "verse_006",
+      "surahNumber": 13,
+      "surahName": "Ar-Ra'd",
+      "ayahNumber": 28,
+      "arabic": "أَلَا بِذِكْرِ ٱللَّهِ تَطْمَئِنُّ ٱلْقُلُوبُ",
+      "translation": "Unquestionably, by the remembrance of Allah hearts are assured."
+    },
+    {
+      "id": "verse_007",
+      "surahNumber": 39,
+      "surahName": "Az-Zumar",
+      "ayahNumber": 53,
+      "arabic": "لَا تَقْنَطُوا۟ مِن رَّحْمَةِ ٱللَّهِ ۚ إِنَّ ٱللَّهَ يَغْفِرُ ٱلذُّنُوبَ جَمِيعًا",
+      "translation": "Do not despair of the mercy of Allah. Indeed, Allah forgives all sins."
+    },
+    {
+      "id": "verse_008",
+      "surahNumber": 40,
+      "surahName": "Ghafir",
+      "ayahNumber": 60,
+      "arabic": "ٱدْعُونِىٓ أَسْتَجِبْ لَكُمْ",
+      "translation": "Call upon Me; I will respond to you."
+    },
+    {
+      "id": "verse_009",
+      "surahNumber": 14,
+      "surahName": "Ibrahim",
+      "ayahNumber": 7,
+      "arabic": "لَئِن شَكَرْتُمْ لَأَزِيدَنَّكُمْ",
+      "translation": "If you are grateful, I will surely increase you in favor."
+    },
+    {
+      "id": "verse_010",
+      "surahNumber": 3,
+      "surahName": "Aal-i-Imran",
+      "ayahNumber": 185,
+      "arabic": "كُلُّ نَفْسٍ ذَآئِقَةُ ٱلْمَوْتِ",
+      "translation": "Every soul will taste death."
+    },
+    {
+      "id": "verse_011",
+      "surahNumber": 112,
+      "surahName": "Al-Ikhlas",
+      "ayahNumber": 1,
+      "arabic": "قُلْ هُوَ ٱللَّهُ أَحَدٌ",
+      "translation": "Say, He is Allah, One."
+    },
+    {
+      "id": "verse_012",
+      "surahNumber": 1,
+      "surahName": "Al-Fatihah",
+      "ayahNumber": 2,
+      "arabic": "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ",
+      "translation": "All praise is due to Allah, Lord of the worlds."
+    },
+    {
+      "id": "verse_013",
+      "surahNumber": 1,
+      "surahName": "Al-Fatihah",
+      "ayahNumber": 5,
+      "arabic": "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ",
+      "translation": "It is You we worship and You we ask for help."
+    },
+    {
+      "id": "verse_014",
+      "surahNumber": 2,
+      "surahName": "Al-Baqarah",
+      "ayahNumber": 153,
+      "arabic": "يَـٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟ ٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ ۚ إِنَّ ٱللَّهَ مَعَ ٱلصَّـٰبِرِينَ",
+      "translation": "O you who have believed, seek help through patience and prayer. Indeed, Allah is with the patient."
+    },
+    {
+      "id": "verse_015",
+      "surahNumber": 3,
+      "surahName": "Aal-i-Imran",
+      "ayahNumber": 159,
+      "arabic": "فَبِمَا رَحْمَةٍۢ مِّنَ ٱللَّهِ لِنتَ لَهُمْ",
+      "translation": "So by mercy from Allah, you were lenient with them."
+    },
+    {
+      "id": "verse_016",
+      "surahNumber": 3,
+      "surahName": "Aal-i-Imran",
+      "ayahNumber": 103,
+      "arabic": "وَٱعْتَصِمُوا۟ بِحَبْلِ ٱللَّهِ جَمِيعًا وَلَا تَفَرَّقُوا۟",
+      "translation": "And hold firmly to the rope of Allah all together and do not become divided."
+    },
+    {
+      "id": "verse_017",
+      "surahNumber": 5,
+      "surahName": "Al-Ma'idah",
+      "ayahNumber": 32,
+      "arabic": "وَمَنْ أَحْيَاهَا فَكَأَنَّمَآ أَحْيَا ٱلنَّاسَ جَمِيعًا",
+      "translation": "Whoever saves one life — it is as if he had saved mankind entirely."
+    },
+    {
+      "id": "verse_018",
+      "surahNumber": 6,
+      "surahName": "Al-An'am",
+      "ayahNumber": 162,
+      "arabic": "قُلْ إِنَّ صَلَاتِى وَنُسُكِى وَمَحْيَاىَ وَمَمَاتِى لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ",
+      "translation": "Say, Indeed, my prayer, my rites of sacrifice, my living and my dying are for Allah, Lord of the worlds."
+    },
+    {
+      "id": "verse_019",
+      "surahNumber": 7,
+      "surahName": "Al-A'raf",
+      "ayahNumber": 31,
+      "arabic": "وَكُلُوا۟ وَٱشْرَبُوا۟ وَلَا تُسْرِفُوٓا۟ ۚ إِنَّهُۥ لَا يُحِبُّ ٱلْمُسْرِفِينَ",
+      "translation": "And eat and drink, but be not excessive. Indeed, He does not like those who commit excess."
+    },
+    {
+      "id": "verse_020",
+      "surahNumber": 9,
+      "surahName": "At-Tawbah",
+      "ayahNumber": 51,
+      "arabic": "قُل لَّن يُصِيبَنَآ إِلَّا مَا كَتَبَ ٱللَّهُ لَنَا",
+      "translation": "Say, Never will we be struck except by what Allah has decreed for us."
+    },
+    {
+      "id": "verse_021",
+      "surahNumber": 11,
+      "surahName": "Hud",
+      "ayahNumber": 115,
+      "arabic": "وَٱصْبِرْ فَإِنَّ ٱللَّهَ لَا يُضِيعُ أَجْرَ ٱلْمُحْسِنِينَ",
+      "translation": "And be patient, for indeed, Allah does not allow to be lost the reward of those who do good."
+    },
+    {
+      "id": "verse_022",
+      "surahNumber": 12,
+      "surahName": "Yusuf",
+      "ayahNumber": 87,
+      "arabic": "إِنَّهُۥ لَا يَا۟يْـَٔسُ مِن رَّوْحِ ٱللَّهِ إِلَّا ٱلْقَوْمُ ٱلْكَـٰفِرُونَ",
+      "translation": "Indeed, no one despairs of relief from Allah except the disbelieving people."
+    },
+    {
+      "id": "verse_023",
+      "surahNumber": 13,
+      "surahName": "Ar-Ra'd",
+      "ayahNumber": 11,
+      "arabic": "إِنَّ ٱللَّهَ لَا يُغَيِّرُ مَا بِقَوْمٍ حَتَّىٰ يُغَيِّرُوا۟ مَا بِأَنفُسِهِمْ",
+      "translation": "Indeed, Allah will not change the condition of a people until they change what is in themselves."
+    },
+    {
+      "id": "verse_024",
+      "surahNumber": 16,
+      "surahName": "An-Nahl",
+      "ayahNumber": 97,
+      "arabic": "مَنْ عَمِلَ صَـٰلِحًا مِّن ذَكَرٍ أَوْ أُنثَىٰ وَهُوَ مُؤْمِنٌ فَلَنُحْيِيَنَّهُۥ حَيَوٰةً طَيِّبَةً",
+      "translation": "Whoever does righteousness, whether male or female, while being a believer — We will surely cause him to live a good life."
+    },
+    {
+      "id": "verse_025",
+      "surahNumber": 17,
+      "surahName": "Al-Isra",
+      "ayahNumber": 23,
+      "arabic": "وَقَضَىٰ رَبُّكَ أَلَّا تَعْبُدُوٓا۟ إِلَّآ إِيَّاهُ وَبِٱلْوَٰلِدَيْنِ إِحْسَـٰنًا",
+      "translation": "Your Lord has decreed that you worship none but Him, and to parents, good treatment."
+    },
+    {
+      "id": "verse_026",
+      "surahNumber": 18,
+      "surahName": "Al-Kahf",
+      "ayahNumber": 46,
+      "arabic": "ٱلْمَالُ وَٱلْبَنُونَ زِينَةُ ٱلْحَيَوٰةِ ٱلدُّنْيَا",
+      "translation": "Wealth and children are but adornment of the worldly life."
+    },
+    {
+      "id": "verse_027",
+      "surahNumber": 20,
+      "surahName": "Ta-Ha",
+      "ayahNumber": 114,
+      "arabic": "وَقُل رَّبِّ زِدْنِى عِلْمًا",
+      "translation": "And say, My Lord, increase me in knowledge."
+    },
+    {
+      "id": "verse_028",
+      "surahNumber": 21,
+      "surahName": "Al-Anbiya",
+      "ayahNumber": 87,
+      "arabic": "لَّآ إِلَـٰهَ إِلَّآ أَنتَ سُبْحَـٰنَكَ إِنِّى كُنتُ مِنَ ٱلظَّـٰلِمِينَ",
+      "translation": "There is no deity except You; exalted are You. Indeed, I have been of the wrongdoers."
+    },
+    {
+      "id": "verse_029",
+      "surahNumber": 25,
+      "surahName": "Al-Furqan",
+      "ayahNumber": 63,
+      "arabic": "وَعِبَادُ ٱلرَّحْمَـٰنِ ٱلَّذِينَ يَمْشُونَ عَلَى ٱلْأَرْضِ هَوْنًا",
+      "translation": "The servants of the Most Merciful are those who walk upon the earth in humility."
+    },
+    {
+      "id": "verse_030",
+      "surahNumber": 26,
+      "surahName": "Ash-Shu'ara",
+      "ayahNumber": 80,
+      "arabic": "وَإِذَا مَرِضْتُ فَهُوَ يَشْفِينِ",
+      "translation": "And when I am ill, it is He who cures me."
+    },
+    {
+      "id": "verse_031",
+      "surahNumber": 29,
+      "surahName": "Al-Ankabut",
+      "ayahNumber": 69,
+      "arabic": "وَٱلَّذِينَ جَـٰهَدُوا۟ فِينَا لَنَهْدِيَنَّهُمْ سُبُلَنَا",
+      "translation": "Those who strive for Us — We will surely guide them to Our ways."
+    },
+    {
+      "id": "verse_032",
+      "surahNumber": 30,
+      "surahName": "Ar-Rum",
+      "ayahNumber": 21,
+      "arabic": "وَمِنْ ءَايَـٰتِهِۦٓ أَنْ خَلَقَ لَكُم مِّنْ أَنفُسِكُمْ أَزْوَٰجًا لِّتَسْكُنُوٓا۟ إِلَيْهَا",
+      "translation": "And of His signs is that He created for you from yourselves mates that you may find tranquility in them."
+    },
+    {
+      "id": "verse_033",
+      "surahNumber": 31,
+      "surahName": "Luqman",
+      "ayahNumber": 14,
+      "arabic": "وَوَصَّيْنَا ٱلْإِنسَـٰنَ بِوَٰلِدَيْهِ",
+      "translation": "And We have enjoined upon man care for his parents."
+    },
+    {
+      "id": "verse_034",
+      "surahNumber": 33,
+      "surahName": "Al-Ahzab",
+      "ayahNumber": 21,
+      "arabic": "لَّقَدْ كَانَ لَكُمْ فِى رَسُولِ ٱللَّهِ أُسْوَةٌ حَسَنَةٌ",
+      "translation": "There has certainly been for you in the Messenger of Allah an excellent pattern."
+    },
+    {
+      "id": "verse_035",
+      "surahNumber": 33,
+      "surahName": "Al-Ahzab",
+      "ayahNumber": 41,
+      "arabic": "يَـٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟ ٱذْكُرُوا۟ ٱللَّهَ ذِكْرًا كَثِيرًا",
+      "translation": "O you who have believed, remember Allah with much remembrance."
+    },
+    {
+      "id": "verse_036",
+      "surahNumber": 36,
+      "surahName": "Ya-Sin",
+      "ayahNumber": 82,
+      "arabic": "إِنَّمَآ أَمْرُهُۥٓ إِذَآ أَرَادَ شَيْـًٔا أَن يَقُولَ لَهُۥ كُن فَيَكُونُ",
+      "translation": "His command is only when He intends a thing that He says to it, Be, and it is."
+    },
+    {
+      "id": "verse_037",
+      "surahNumber": 41,
+      "surahName": "Fussilat",
+      "ayahNumber": 30,
+      "arabic": "إِنَّ ٱلَّذِينَ قَالُوا۟ رَبُّنَا ٱللَّهُ ثُمَّ ٱسْتَقَـٰمُوا۟ تَتَنَزَّلُ عَلَيْهِمُ ٱلْمَلَـٰٓئِكَةُ",
+      "translation": "Indeed, those who have said, Our Lord is Allah, and then remained on a right course — the angels will descend upon them."
+    },
+    {
+      "id": "verse_038",
+      "surahNumber": 49,
+      "surahName": "Al-Hujurat",
+      "ayahNumber": 13,
+      "arabic": "إِنَّ أَكْرَمَكُمْ عِندَ ٱللَّهِ أَتْقَىٰكُمْ",
+      "translation": "Indeed, the most noble of you in the sight of Allah is the most righteous of you."
+    },
+    {
+      "id": "verse_039",
+      "surahNumber": 51,
+      "surahName": "Adh-Dhariyat",
+      "ayahNumber": 56,
+      "arabic": "وَمَا خَلَقْتُ ٱلْجِنَّ وَٱلْإِنسَ إِلَّا لِيَعْبُدُونِ",
+      "translation": "And I did not create the jinn and mankind except to worship Me."
+    },
+    {
+      "id": "verse_040",
+      "surahNumber": 55,
+      "surahName": "Ar-Rahman",
+      "ayahNumber": 13,
+      "arabic": "فَبِأَىِّ ءَالَآءِ رَبِّكُمَا تُكَذِّبَانِ",
+      "translation": "So which of the favors of your Lord would you deny?"
+    },
+    {
+      "id": "verse_041",
+      "surahNumber": 57,
+      "surahName": "Al-Hadid",
+      "ayahNumber": 4,
+      "arabic": "وَهُوَ مَعَكُمْ أَيْنَ مَا كُنتُمْ",
+      "translation": "And He is with you wherever you are."
+    },
+    {
+      "id": "verse_042",
+      "surahNumber": 64,
+      "surahName": "At-Taghabun",
+      "ayahNumber": 11,
+      "arabic": "وَمَن يُؤْمِنۢ بِٱللَّهِ يَهْدِ قَلْبَهُۥ",
+      "translation": "And whoever believes in Allah — He will guide his heart."
+    },
+    {
+      "id": "verse_043",
+      "surahNumber": 67,
+      "surahName": "Al-Mulk",
+      "ayahNumber": 2,
+      "arabic": "ٱلَّذِى خَلَقَ ٱلْمَوْتَ وَٱلْحَيَوٰةَ لِيَبْلُوَكُمْ أَيُّكُمْ أَحْسَنُ عَمَلًا",
+      "translation": "He who created death and life to test you which of you is best in deed."
+    },
+    {
+      "id": "verse_044",
+      "surahNumber": 76,
+      "surahName": "Al-Insan",
+      "ayahNumber": 9,
+      "arabic": "إِنَّمَا نُطْعِمُكُمْ لِوَجْهِ ٱللَّهِ لَا نُرِيدُ مِنكُمْ جَزَآءً وَلَا شُكُورًا",
+      "translation": "We feed you only for the countenance of Allah. We wish not from you reward or gratitude."
+    },
+    {
+      "id": "verse_045",
+      "surahNumber": 93,
+      "surahName": "Ad-Duha",
+      "ayahNumber": 5,
+      "arabic": "وَلَسَوْفَ يُعْطِيكَ رَبُّكَ فَتَرْضَىٰ",
+      "translation": "And your Lord is going to give you, and you will be satisfied."
+    },
+    {
+      "id": "verse_046",
+      "surahNumber": 94,
+      "surahName": "Ash-Sharh",
+      "ayahNumber": 5,
+      "arabic": "فَإِنَّ مَعَ ٱلْعُسْرِ يُسْرًا",
+      "translation": "For indeed, with hardship comes ease."
+    },
+    {
+      "id": "verse_047",
+      "surahNumber": 103,
+      "surahName": "Al-Asr",
+      "ayahNumber": 2,
+      "arabic": "إِنَّ ٱلْإِنسَـٰنَ لَفِى خُسْرٍ",
+      "translation": "Indeed, mankind is in loss."
+    },
+    {
+      "id": "verse_048",
+      "surahNumber": 110,
+      "surahName": "An-Nasr",
+      "ayahNumber": 3,
+      "arabic": "فَسَبِّحْ بِحَمْدِ رَبِّكَ وَٱسْتَغْفِرْهُ ۚ إِنَّهُۥ كَانَ تَوَّابًۢا",
+      "translation": "Then exalt Him with praise of your Lord and ask forgiveness of Him. Indeed, He is ever Accepting of repentance."
+    },
+    {
+      "id": "verse_049",
+      "surahNumber": 113,
+      "surahName": "Al-Falaq",
+      "ayahNumber": 1,
+      "arabic": "قُلْ أَعُوذُ بِرَبِّ ٱلْفَلَقِ",
+      "translation": "Say, I seek refuge in the Lord of daybreak."
+    },
+    {
+      "id": "verse_050",
+      "surahNumber": 114,
+      "surahName": "An-Nas",
+      "ayahNumber": 1,
+      "arabic": "قُلْ أَعُوذُ بِرَبِّ ٱلنَّاسِ",
+      "translation": "Say, I seek refuge in the Lord of mankind."
+    }
+  ]
+}

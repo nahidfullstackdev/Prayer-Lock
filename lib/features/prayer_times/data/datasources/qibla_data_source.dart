@@ -1,35 +1,35 @@
-import 'package:flutter_qiblah/flutter_qiblah.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:prayer_lock/core/utils/logger.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/location_data.dart';
 import 'package:prayer_lock/features/prayer_times/domain/entities/qibla_direction.dart';
+import 'package:prayer_lock/features/prayer_times/domain/utils/qibla_math.dart';
 
-/// Data source for Qibla direction using flutter_qiblah package
+/// Data source for Qibla direction.
+///
+/// Computes the Qibla bearing mathematically from the user's coordinates
+/// using the great-circle initial bearing formula. The compass-heading
+/// stream is supplied separately by the UI layer via `flutter_qiblah`.
 class QiblaDataSource {
-  /// Kaaba coordinates in Makkah
-  static const double kaabaLatitude = 21.4225;
-  static const double kaabaLongitude = 39.8262;
-
-  /// Get Qibla direction from current location
+  /// Computes the absolute Qibla bearing (from true north) and the
+  /// distance to the Kaaba for the given location.
   Future<QiblaDirection> getQiblaDirection(LocationData location) async {
     try {
-      AppLogger.info('Calculating Qibla direction');
-
-      // Get first value from Qibla stream
-      final qibla = await FlutterQiblah.qiblahStream.first;
-
-      // Calculate distance to Kaaba
+      final bearing = QiblaMath.calculateQiblaBearing(
+        location.latitude,
+        location.longitude,
+      );
       final distance = _calculateDistanceToKaaba(
         location.latitude,
         location.longitude,
       );
 
       AppLogger.info(
-        'Qibla: ${qibla.direction.toStringAsFixed(1)}°, Distance: ${distance.toStringAsFixed(1)}km',
+        'Qibla bearing: ${bearing.toStringAsFixed(1)}°, '
+        'distance: ${distance.toStringAsFixed(1)}km',
       );
 
       return QiblaDirection(
-        direction: qibla.direction,
+        direction: bearing,
         distance: distance,
         currentLocation: location,
       );
@@ -39,25 +39,13 @@ class QiblaDataSource {
     }
   }
 
-  /// Stream of compass heading updates for live compass
-  Stream<double> getCompassHeadingStream() {
-    try {
-      AppLogger.info('Starting Qibla compass stream');
-      return FlutterQiblah.qiblahStream.map((event) => event.direction);
-    } catch (e, stackTrace) {
-      AppLogger.error('Error starting compass stream', e, stackTrace);
-      rethrow;
-    }
-  }
-
-  /// Calculate distance from given coordinates to Kaaba using Haversine formula
   double _calculateDistanceToKaaba(double latitude, double longitude) {
     return Geolocator.distanceBetween(
           latitude,
           longitude,
-          kaabaLatitude,
-          kaabaLongitude,
+          QiblaMath.kaabaLatitude,
+          QiblaMath.kaabaLongitude,
         ) /
-        1000; // Convert meters to kilometers
+        1000;
   }
 }

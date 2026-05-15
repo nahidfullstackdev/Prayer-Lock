@@ -48,10 +48,11 @@ class _QuranHomeScreenState extends ConsumerState<QuranHomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SurahDetailScreen(
-          surahId: surah.id,
-          surahName: surah.nameTransliteration,
-        ),
+        builder:
+            (_) => SurahDetailScreen(
+              surahId: surah.id,
+              surahName: surah.nameTransliteration,
+            ),
       ),
     );
   }
@@ -156,28 +157,27 @@ class _QuranHomeScreenState extends ConsumerState<QuranHomeScreen> {
                   const SizedBox(height: 6),
                   Text(
                     'The Noble Quran  •  القرآن الكريم',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: cs.onSurfaceVariant,
-                    ),
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                   ),
                 ],
               ),
             ),
             IconButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SearchScreen()),
-              ),
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SearchScreen()),
+                  ),
               icon: Icon(Icons.search_rounded, color: cs.primary),
               iconSize: 26,
               tooltip: 'Search Quran',
             ),
             IconButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const BookmarksScreen()),
-              ),
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const BookmarksScreen()),
+                  ),
               icon: Icon(Icons.bookmark_outline_rounded, color: cs.secondary),
               iconSize: 26,
               tooltip: 'Bookmarks',
@@ -202,19 +202,20 @@ class _QuranHomeScreenState extends ConsumerState<QuranHomeScreen> {
           color: cs.onSurfaceVariant.withValues(alpha: 0.5),
           size: 22,
         ),
-        suffixIcon: _searchQuery.isNotEmpty
-            ? IconButton(
-                icon: Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
-                ),
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() => _searchQuery = '');
-                },
-              )
-            : null,
+        suffixIcon:
+            _searchQuery.isNotEmpty
+                ? IconButton(
+                  icon: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                )
+                : null,
       ),
     );
   }
@@ -241,7 +242,7 @@ class _QuranHomeScreenState extends ConsumerState<QuranHomeScreen> {
             VerticalDivider(width: 1, thickness: 1, color: cs.outlineVariant),
             Expanded(
               child: _QuranStat(
-                value: '6236',
+                value: '6666',
                 label: 'Verses',
                 valueColor: cs.secondary,
               ),
@@ -269,28 +270,29 @@ class _QuranHomeScreenState extends ConsumerState<QuranHomeScreen> {
         if (!snapshot.hasData || snapshot.data == null) {
           return const SizedBox.shrink();
         }
-        return (snapshot.data as dynamic).fold(
-          (_) => const SizedBox.shrink(),
-          (lastRead) {
-            if (lastRead == null) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: LastReadBanner(
-                lastRead: lastRead,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SurahDetailScreen(
-                      surahId: lastRead.surahId,
-                      surahName: lastRead.surahName,
-                      initialAyahId: lastRead.ayahId,
+        return (snapshot.data as dynamic).fold((_) => const SizedBox.shrink(), (
+          lastRead,
+        ) {
+          if (lastRead == null) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: LastReadBanner(
+              lastRead: lastRead,
+              onTap:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => SurahDetailScreen(
+                            surahId: lastRead.surahId,
+                            surahName: lastRead.surahName,
+                            initialAyahId: lastRead.ayahId,
+                          ),
                     ),
                   ),
-                ),
-              ),
-            );
-          },
-        );
+            ),
+          );
+        });
       },
     );
   }
@@ -313,16 +315,18 @@ class _QuranHomeScreenState extends ConsumerState<QuranHomeScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: surahs.length,
-              separatorBuilder: (_, __) => Divider(
-                height: 1,
-                thickness: 1,
-                color: cs.outlineVariant,
-                indent: 68,
-              ),
-              itemBuilder: (context, index) => SurahCard(
-                surah: surahs[index],
-                onTap: () => _openSurah(surahs[index]),
-              ),
+              separatorBuilder:
+                  (_, __) => Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: cs.outlineVariant,
+                    indent: 68,
+                  ),
+              itemBuilder:
+                  (context, index) => SurahCard(
+                    surah: surahs[index],
+                    onTap: () => _openSurah(surahs[index]),
+                  ),
             ),
           ),
         ),

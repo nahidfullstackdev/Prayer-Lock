@@ -25,13 +25,4 @@ class QiblaRepositoryImpl implements QiblaRepository {
     }
   }
 
-  @override
-  Stream<double> getCompassHeadingStream() {
-    try {
-      return dataSource.getCompassHeadingStream();
-    } catch (e, stackTrace) {
-      AppLogger.error('Error getting compass stream', e, stackTrace);
-      return Stream.error(e, stackTrace);
-    }
-  }
 }
